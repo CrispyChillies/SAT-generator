@@ -1,0 +1,1630 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        th:hover {
+            background-color: #45a049;
+        }
+        th.sortable::after {
+            content: ' ↕';
+            font-size: 0.8em;
+            opacity: 0.5;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #e8f5e9;
+        }
+        .subject-header {
+            background-color: #2196F3;
+            color: white;
+            font-weight: bold;
+        }
+        .pool-header {
+            background-color: #FF9800;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Question Categories by Subject, Pool, and Section</h1>
+    <p><em>Click on column headers to sort</em></p>
+    <table id="categoriesTable">
+        <thead>
+            <tr>
+                <th class="sortable" onclick="sortTable(0)">Subject</th>
+                <th class="sortable" onclick="sortTable(1)">Pool</th>
+                <th class="sortable" onclick="sortTable(2)">Section</th>
+                <th class="sortable" onclick="sortTable(3)">Category</th>
+                <th class="sortable" onclick="sortTable(4)">Number of Questions</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>100 (E: 30 - M: 35 - H: 35)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>129 (E: 42 - M: 44 - H: 43)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>124 (E: 45 - M: 39 - H: 40)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>174 (E: 34 - M: 77 - H: 63)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>103 (E: 31 - M: 36 - H: 36)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>lesson_practice</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>52 (E: 16 - M: 18 - H: 18)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>32 (E: 13 - M: 9 - H: 10)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>91 (E: 35 - M: 36 - H: 20)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>52 (E: 12 - M: 16 - H: 24)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>18 (E: 1 - M: 7 - H: 10)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>49 (E: 15 - M: 14 - H: 20)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>mock_test</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>52 (E: 10 - M: 17 - H: 25)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>97 (E: 79 - M: 9 - H: 9)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>208 (E: 97 - M: 54 - H: 57)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>111 (E: 15 - M: 45 - H: 51)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>72 (E: 17 - M: 33 - H: 22)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>134 (E: 47 - M: 28 - H: 59)</td>
+            </tr>
+
+            <tr>
+                <td>Algebra</td>
+                <td>practice_test</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>123 (E: 30 - M: 36 - H: 57)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>45 (E: 16 - M: 16 - H: 13)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>47 (E: 14 - M: 24 - H: 9)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>45 (E: 14 - M: 20 - H: 11)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>177 (E: 69 - M: 80 - H: 28)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>87 (E: 32 - M: 34 - H: 21)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>lesson_practice</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>133 (E: 43 - M: 61 - H: 29)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>38 (E: 6 - M: 16 - H: 16)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>12 (E: 2 - M: 6 - H: 4)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>41 (E: 10 - M: 19 - H: 12)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>6 (E: 2 - M: 0 - H: 4)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>16 (E: 2 - M: 6 - H: 8)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>mock_test</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>83 (E: 25 - M: 26 - H: 32)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>74 (E: 29 - M: 24 - H: 21)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>54 (E: 16 - M: 27 - H: 11)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>82 (E: 19 - M: 31 - H: 32)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>177 (E: 69 - M: 80 - H: 28)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>88 (E: 31 - M: 35 - H: 22)</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>practice_test</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>265 (E: 86 - M: 95 - H: 84)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>65 (E: 30 - M: 21 - H: 14)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>72 (E: 38 - M: 19 - H: 15)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>64 (E: 28 - M: 22 - H: 14)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>72 (E: 36 - M: 22 - H: 14)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>67 (E: 29 - M: 23 - H: 15)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>84 (E: 35 - M: 28 - H: 21)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>168 (E: 55 - M: 65 - H: 48)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>lesson_practice</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>104 (E: 31 - M: 41 - H: 32)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>151 (E: 102 - M: 49 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>196 (E: 171 - M: 25 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>73 (E: 46 - M: 27 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>196 (E: 141 - M: 55 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>221 (E: 108 - M: 113 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>133 (E: 60 - M: 73 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>215 (E: 47 - M: 168 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>mock_test</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>187 (E: 133 - M: 54 - H: 0)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>78 (E: 26 - M: 30 - H: 22)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>88 (E: 53 - M: 22 - H: 13)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>92 (E: 38 - M: 34 - H: 20)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>76 (E: 39 - M: 22 - H: 15)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>181 (E: 75 - M: 58 - H: 48)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>127 (E: 32 - M: 65 - H: 30)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>191 (E: 41 - M: 67 - H: 83)</td>
+            </tr>
+
+            <tr>
+                <td>SAT</td>
+                <td>practice_test</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>165 (E: 68 - M: 51 - H: 46)</td>
+            </tr>
+
+        </tbody>
+    </table>
+    
+    <h2>Lessons by Section and Domain</h2>
+    <p><em>Click on column headers to sort</em></p>
+    <table id="lessonsTable">
+        <thead>
+            <tr>
+                <th class="sortable" onclick="sortLessonsTable(0)">Section</th>
+                <th class="sortable" onclick="sortLessonsTable(1)">Domain</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions, Linear Functions and Equations, Polynomial Functions and Operations, Quadratic Functions and Equations, Rational and Radical Functions, Sequences and Series</td>
+            </tr>
+
+            <tr>
+                <td>Geometry</td>
+                <td>Area and Volume, Circles and Arcs, Coordinate Geometry, Foundations and Reasoning, Transformations and Symmetry, Triangles and Polygons</td>
+            </tr>
+
+            <tr>
+                <td>Math</td>
+                <td>Advanced Math, Algebra, Geometry and Trigonometry, Problem-Solving and Data Analysis</td>
+            </tr>
+
+            <tr>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure, Expression of Ideas, Information and Ideas, Standard English Conventions</td>
+            </tr>
+
+        </tbody>
+    </table>
+    
+    <h2>Questions by Unit Number</h2>
+    <p><em>Click on column headers to sort</em></p>
+    <table id="unitsTable">
+        <thead>
+            <tr>
+                <th class="sortable" onclick="sortUnitsTable(0)">Unit Number</th>
+                <th class="sortable" onclick="sortUnitsTable(1)">Section</th>
+                <th class="sortable" onclick="sortUnitsTable(2)">Domain</th>
+                <th class="sortable" onclick="sortUnitsTable(3)">Number of Questions</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td>1</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>1</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>17</td>
+            </tr>
+
+            <tr>
+                <td>1</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>1</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>32</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>26</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td>Geometry</td>
+                <td>Circles and Arcs</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>24</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>23</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td>Geometry</td>
+                <td>Coordinate Geometry</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>7</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>7</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>20</td>
+            </tr>
+
+            <tr>
+                <td>7</td>
+                <td>Math</td>
+                <td>Algebra</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>7</td>
+                <td>Reading and Writing</td>
+                <td>Information and Ideas</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>8</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>8</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>18</td>
+            </tr>
+
+            <tr>
+                <td>8</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>8</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>25</td>
+            </tr>
+
+            <tr>
+                <td>9</td>
+                <td>Algebra</td>
+                <td>Linear Functions and Equations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>9</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>9</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>9</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>10</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>10</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>10</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>18</td>
+            </tr>
+
+            <tr>
+                <td>10</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>10</td>
+                <td>Reading and Writing</td>
+                <td>Craft and Structure</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>11</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>46</td>
+            </tr>
+
+            <tr>
+                <td>11</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>11</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>11</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>16</td>
+            </tr>
+
+            <tr>
+                <td>12</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>12</td>
+                <td>Geometry</td>
+                <td>Area and Volume</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>12</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>12</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>21</td>
+            </tr>
+
+            <tr>
+                <td>13</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>13</td>
+                <td>Geometry</td>
+                <td>Transformations and Symmetry</td>
+                <td>16</td>
+            </tr>
+
+            <tr>
+                <td>13</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>13</td>
+                <td>Math</td>
+                <td>Geometry and Trigonometry</td>
+                <td>10</td>
+            </tr>
+
+            <tr>
+                <td>13</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>14</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>28</td>
+            </tr>
+
+            <tr>
+                <td>14</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>14</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>14</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>15</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>15</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>15</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>15</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>24</td>
+            </tr>
+
+            <tr>
+                <td>16</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>16</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>16</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>16</td>
+                <td>Reading and Writing</td>
+                <td>Standard English Conventions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>17</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>17</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>17</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>17</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>18</td>
+            </tr>
+
+            <tr>
+                <td>18</td>
+                <td>Algebra</td>
+                <td>Quadratic Functions and Equations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>18</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>18</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>18</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>24</td>
+            </tr>
+
+            <tr>
+                <td>19</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>19</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>19</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>19</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>23</td>
+            </tr>
+
+            <tr>
+                <td>20</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>20</td>
+                <td>Geometry</td>
+                <td>Triangles and Polygons</td>
+                <td>30</td>
+            </tr>
+
+            <tr>
+                <td>20</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>20</td>
+                <td>Reading and Writing</td>
+                <td>Expression of Ideas</td>
+                <td>19</td>
+            </tr>
+
+            <tr>
+                <td>21</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>21</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>21</td>
+                <td>Math</td>
+                <td>Problem-Solving and Data Analysis</td>
+                <td>9</td>
+            </tr>
+
+            <tr>
+                <td>22</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>22</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>22</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>17</td>
+            </tr>
+
+            <tr>
+                <td>23</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>23</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>23</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>16</td>
+            </tr>
+
+            <tr>
+                <td>24</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>24</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>24</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>16</td>
+            </tr>
+
+            <tr>
+                <td>25</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>25</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>25</td>
+                <td>Math</td>
+                <td>Advanced Math</td>
+                <td>16</td>
+            </tr>
+
+            <tr>
+                <td>26</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>26</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>27</td>
+                <td>Algebra</td>
+                <td>Polynomial Functions and Operations</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>27</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>28</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>28</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>29</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>11</td>
+            </tr>
+
+            <tr>
+                <td>29</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>30</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>30</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>30</td>
+            </tr>
+
+            <tr>
+                <td>31</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>12</td>
+            </tr>
+
+            <tr>
+                <td>31</td>
+                <td>Geometry</td>
+                <td>Foundations and Reasoning</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>32</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>33</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>34</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>35</td>
+                <td>Algebra</td>
+                <td>Rational and Radical Functions</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>36</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>37</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>38</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>39</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>40</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>41</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>14</td>
+            </tr>
+
+            <tr>
+                <td>42</td>
+                <td>Algebra</td>
+                <td>Exponential and Logarithmic Functions</td>
+                <td>15</td>
+            </tr>
+
+            <tr>
+                <td>43</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>44</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>13</td>
+            </tr>
+
+            <tr>
+                <td>45</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>12</td>
+            </tr>
+
+            <tr>
+                <td>46</td>
+                <td>Algebra</td>
+                <td>Sequences and Series</td>
+                <td>14</td>
+            </tr>
+
+        </tbody>
+    </table>
+    <script>
+        let sortDirection = {};
+        let lessonsSortDirection = {};
+        let unitsSortDirection = {};
+        
+        function sortTable(columnIndex) {
+            const table = document.getElementById('categoriesTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+            
+            // Determine sort direction
+            if (!sortDirection[columnIndex] || sortDirection[columnIndex] === 'desc') {
+                sortDirection[columnIndex] = 'asc';
+            } else {
+                sortDirection[columnIndex] = 'desc';
+            }
+            
+            // Remove sort indicators from all headers
+            headers.forEach((header, index) => {
+                header.classList.remove('sort-asc', 'sort-desc');
+                if (index === columnIndex) {
+                    header.classList.add('sort-' + sortDirection[columnIndex]);
+                }
+            });
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aText = a.cells[columnIndex].textContent.trim();
+                const bText = b.cells[columnIndex].textContent.trim();
+                
+                // For column 4 (Number of Questions), extract the total number before the parenthesis
+                if (columnIndex === 4) {
+                    const aMatch = aText.match(/^(\d+)/);
+                    const bMatch = bText.match(/^(\d+)/);
+                    const aNum = aMatch ? parseInt(aMatch[1]) : 0;
+                    const bNum = bMatch ? parseInt(bMatch[1]) : 0;
+                    if (sortDirection[columnIndex] === 'asc') {
+                        return aNum - bNum;
+                    } else {
+                        return bNum - aNum;
+                    }
+                }
+                
+                // Compare as strings for other columns
+                if (sortDirection[columnIndex] === 'asc') {
+                    return aText.localeCompare(bText);
+                } else {
+                    return bText.localeCompare(aText);
+                }
+            });
+            
+            // Remove all rows from tbody
+            rows.forEach(row => tbody.removeChild(row));
+            
+            // Add sorted rows back
+            rows.forEach(row => tbody.appendChild(row));
+        }
+        
+        function sortLessonsTable(columnIndex) {
+            const table = document.getElementById('lessonsTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+            
+            // Determine sort direction
+            if (!lessonsSortDirection[columnIndex] || lessonsSortDirection[columnIndex] === 'desc') {
+                lessonsSortDirection[columnIndex] = 'asc';
+            } else {
+                lessonsSortDirection[columnIndex] = 'desc';
+            }
+            
+            // Remove sort indicators from all headers
+            headers.forEach((header, index) => {
+                header.classList.remove('sort-asc', 'sort-desc');
+                if (index === columnIndex) {
+                    header.classList.add('sort-' + lessonsSortDirection[columnIndex]);
+                }
+            });
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aText = a.cells[columnIndex].textContent.trim();
+                const bText = b.cells[columnIndex].textContent.trim();
+                
+                // Compare as strings
+                if (lessonsSortDirection[columnIndex] === 'asc') {
+                    return aText.localeCompare(bText);
+                } else {
+                    return bText.localeCompare(aText);
+                }
+            });
+            
+            // Remove all rows from tbody
+            rows.forEach(row => tbody.removeChild(row));
+            
+            // Add sorted rows back
+            rows.forEach(row => tbody.appendChild(row));
+        }
+        
+        function sortUnitsTable(columnIndex) {
+            const table = document.getElementById('unitsTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+            
+            // Determine sort direction
+            if (!unitsSortDirection[columnIndex] || unitsSortDirection[columnIndex] === 'desc') {
+                unitsSortDirection[columnIndex] = 'asc';
+            } else {
+                unitsSortDirection[columnIndex] = 'desc';
+            }
+            
+            // Remove sort indicators from all headers
+            headers.forEach((header, index) => {
+                header.classList.remove('sort-asc', 'sort-desc');
+                if (index === columnIndex) {
+                    header.classList.add('sort-' + unitsSortDirection[columnIndex]);
+                }
+            });
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aText = a.cells[columnIndex].textContent.trim();
+                const bText = b.cells[columnIndex].textContent.trim();
+                
+                // For column 0 (Unit Number) and column 3 (Number of Questions), sort numerically
+                if (columnIndex === 0 || columnIndex === 3) {
+                    const aNum = parseInt(aText) || 0;
+                    const bNum = parseInt(bText) || 0;
+                    if (unitsSortDirection[columnIndex] === 'asc') {
+                        return aNum - bNum;
+                    } else {
+                        return bNum - aNum;
+                    }
+                }
+                
+                // For other columns (Section, Domain), sort as strings
+                if (unitsSortDirection[columnIndex] === 'asc') {
+                    return aText.localeCompare(bText);
+                } else {
+                    return bText.localeCompare(aText);
+                }
+            });
+            
+            // Remove all rows from tbody
+            rows.forEach(row => tbody.removeChild(row));
+            
+            // Add sorted rows back
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    </script>
+</body>
+</html>

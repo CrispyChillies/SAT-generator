@@ -1,0 +1,25 @@
+{
+  "category": "Algebra",
+  "difficulty": "Easy",
+  "id": "39f7f245-d9be-40cf-9e85-61a04cabe76a",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "<p><math alttext=\"dollar sign 21,200\"><mo>$</mo><mn>21,200</mn></math></p>",
+      "<p><math alttext=\"dollar sign 20,800\"><mo>$</mo><mn>20,800</mn></math></p>",
+      "<p><math alttext=\"dollar sign 25,200\"><mo>$</mo><mn>25,200</mn></math></p>",
+      "<p><math alttext=\"dollar sign 61,200\"><mo>$</mo><mrow><mn>61,200</mn></mrow></math></p>"
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "<p>Choice C is correct. It's given that <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> is the total cost, in dollars, to lease a car from this dealership with a monthly payment of <math alttext=\"x\"><mi>x</mi></math> dollars. Therefore, the total cost, in dollars, to lease the car when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mn>500</mn></math> is represented by the value of <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> when <math alttext=\"x equals 500\"><mi>x</mi><mo>=</mo><mn>500</mn></math>. Substituting <math alttext=\"500\"><mn>500</mn></math> for <math alttext=\"x\"><mi>x</mi></math> in the equation <math alttext=\"f left parenthesis x right parenthesis equals 48 x plus 1,200\"><mi>f</mi><mfenced><mi>x</mi></mfenced><mo>=</mo><mn>48</mn><mi>x</mi><mo>+</mo><mn>1,200</mn></math> yields <math alttext=\"f left parenthesis 500 right parenthesis equals 48 left parenthesis 500 right parenthesis plus 1,200\"><mo>&nbsp;</mo><mi>f</mi><mfenced><mn>500</mn></mfenced><mo>=</mo><mn>48</mn><mfenced><mn>500</mn></mfenced><mo>+</mo><mn>1,200</mn></math>, or <math alttext=\"f left parenthesis 500 right parenthesis equals 25,200\"><mi>f</mi><mfenced><mn>500</mn></mfenced><mo>=</mo><mn>25,200</mn></math>. Thus, when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mn>500</mn></math>, the total cost to lease a car is&nbsp;<math alttext=\"dollar sign 25,200\"><mo>$</mo><mn>25,200</mn></math>.&nbsp;</p>\n<p>Choice A is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice B is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice D is incorrect and may result from conceptual or calculation errors.</p>",
+    "paragraph": null,
+    "question": "<p style=\"text-align: left;\">The total cost <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math>, in dollars, to lease a car for <math alttext=\"48\"><mn>48</mn></math> months from a particular car dealership is given by <math alttext=\"f left parenthesis x right parenthesis equals 48 x plus 1,200\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mn>48</mn></mrow><mi>x</mi><mo>+</mo><mrow><mn>1,200</mn></mrow></math>, where <math alttext=\"x\"><mi>x</mi></math> is the monthly payment, in dollars. What is the total cost to lease a car when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mrow><mn>500</mn></mrow></math>?</p>"
+  },
+  "section": "Math",
+  "skill": "",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

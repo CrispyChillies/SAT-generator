@@ -1,0 +1,18 @@
+{
+  "id": "51f22194-b00a-4876-9ef9-af6ec7afc227",
+  "subject": "SAT",
+  "pool": "practice_test",
+  "section": "Math",
+  "category": "Algebra",
+  "skill": "",
+  "difficulty": "Easy",
+  "type": "multiple-choice",
+  "question": {
+    "paragraph": null,
+    "question": "A drone is <math><mn>85</mn></math> m horizontally from the base of a tower. The angle of elevation from the drone to the top of the tower is <math><mn>45</mn><mo>°</mo></math>. Approximately how tall is the tower (to the nearest meter)?",
+    "choices": null,
+    "correct_answer": null,
+    "explanation": null
+  },
+  "image_url": null
+}

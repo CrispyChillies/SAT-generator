@@ -1,0 +1,554 @@
+{
+  "total_questions": 2483,
+  "total_unique_triples": 55,
+  "section_category_skill_triples": [
+    {
+      "section": "Geometry",
+      "category": "Triangles and Polygons",
+      "skill": "(empty)",
+      "count": 265
+    },
+    {
+      "section": "Algebra",
+      "category": "Linear Functions and Equations",
+      "skill": "(empty)",
+      "count": 208
+    },
+    {
+      "section": "Geometry",
+      "category": "Foundations and Reasoning",
+      "skill": "(empty)",
+      "count": 177
+    },
+    {
+      "section": "Algebra",
+      "category": "Rational and Radical Functions",
+      "skill": "(empty)",
+      "count": 134
+    },
+    {
+      "section": "Algebra",
+      "category": "Sequences and Series",
+      "skill": "(empty)",
+      "count": 123
+    },
+    {
+      "section": "Algebra",
+      "category": "Polynomial Functions and Operations",
+      "skill": "(empty)",
+      "count": 111
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Information and Ideas",
+      "skill": "Command of Evidence",
+      "count": 101
+    },
+    {
+      "section": "Algebra",
+      "category": "Exponential and Logarithmic Functions",
+      "skill": "(empty)",
+      "count": 97
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Craft and Structure",
+      "skill": "Words in Context",
+      "count": 95
+    },
+    {
+      "section": "Math",
+      "category": "Algebra",
+      "skill": "(empty)",
+      "count": 88
+    },
+    {
+      "section": "Geometry",
+      "category": "Transformations and Symmetry",
+      "skill": "(empty)",
+      "count": 88
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Standard English Conventions",
+      "skill": "Form, Structure, and Sense",
+      "count": 84
+    },
+    {
+      "section": "Geometry",
+      "category": "Coordinate Geometry",
+      "skill": "(empty)",
+      "count": 82
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Standard English Conventions",
+      "skill": "Boundaries",
+      "count": 81
+    },
+    {
+      "section": "Math",
+      "category": "Advanced Math",
+      "skill": "(empty)",
+      "count": 78
+    },
+    {
+      "section": "Geometry",
+      "category": "Area and Volume",
+      "skill": "(empty)",
+      "count": 74
+    },
+    {
+      "section": "Algebra",
+      "category": "Quadratic Functions and Equations",
+      "skill": "(empty)",
+      "count": 72
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Expression of Ideas",
+      "skill": "Rhetorical Synthesis",
+      "count": 67
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Expression of Ideas",
+      "skill": "Transitions",
+      "count": 60
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Information and Ideas",
+      "skill": "Inferences",
+      "count": 55
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Craft and Structure",
+      "skill": "Text Structure and Purpose",
+      "count": 55
+    },
+    {
+      "section": "Geometry",
+      "category": "Circles and Arcs",
+      "skill": "(empty)",
+      "count": 54
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Information and Ideas",
+      "skill": "Central Ideas and Details",
+      "count": 35
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Craft and Structure",
+      "skill": "Cross-Text Connections",
+      "count": 29
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "(empty)",
+      "count": 28
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Lines, angles, and triangles",
+      "count": 19
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Linear equations in two variables",
+      "count": 10
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Ratios, rates, proportional relationships, and units",
+      "count": 9
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Two-variable data: Models and scatterplots",
+      "count": 9
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Linear functions",
+      "count": 8
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Nonlinear functions",
+      "count": 8
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Right triangles and trigonometry",
+      "count": 8
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Probability and conditional probability",
+      "count": 7
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Area and volume",
+      "count": 7
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "One-variable data: Distributions and measures of center and spread",
+      "count": 6
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Percentages",
+      "count": 5
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Nonlinear functions",
+      "count": 5
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Systems of two linear equations in two variables",
+      "count": 4
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Linear inequalities in one or two variables",
+      "count": 4
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Linear functions",
+      "count": 4
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Linear equations in one variable",
+      "count": 4
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Circles",
+      "count": 4
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Linear equations in two variables",
+      "count": 3
+    },
+    {
+      "section": "Reading and Writing",
+      "category": "Craft and Structure",
+      "skill": "Cross-text Connections",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Linear equations in one variable",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Inference from sample statistics and margin of error ",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Systems of two linear equations in two variables",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Ratios, rates, proportional relationships, and units",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "One-variable data: Distributions and measures of center and spread",
+      "count": 2
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Area and volume",
+      "count": 1
+    },
+    {
+      "section": "Math",
+      "category": "Problem-Solving and Data Analysis",
+      "skill": "Circles",
+      "count": 1
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Linear inequalities in one or two variables",
+      "count": 1
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Nonlinear equations in one variable and systems of equations in two variables ",
+      "count": 1
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Percentages",
+      "count": 1
+    },
+    {
+      "section": "Math",
+      "category": "Geometry and Trigonometry",
+      "skill": "Two-variable data: Models and scatterplots",
+      "count": 1
+    }
+  ],
+  "section_stats": [
+    {
+      "section": "Algebra",
+      "count": 745
+    },
+    {
+      "section": "Geometry",
+      "count": 740
+    },
+    {
+      "section": "Reading and Writing",
+      "count": 664
+    },
+    {
+      "section": "Math",
+      "count": 334
+    }
+  ],
+  "category_stats": [
+    {
+      "category": "Triangles and Polygons",
+      "count": 265
+    },
+    {
+      "category": "Linear Functions and Equations",
+      "count": 208
+    },
+    {
+      "category": "Information and Ideas",
+      "count": 191
+    },
+    {
+      "category": "Craft and Structure",
+      "count": 181
+    },
+    {
+      "category": "Foundations and Reasoning",
+      "count": 177
+    },
+    {
+      "category": "Standard English Conventions",
+      "count": 165
+    },
+    {
+      "category": "Rational and Radical Functions",
+      "count": 134
+    },
+    {
+      "category": "Expression of Ideas",
+      "count": 127
+    },
+    {
+      "category": "Sequences and Series",
+      "count": 123
+    },
+    {
+      "category": "Polynomial Functions and Operations",
+      "count": 111
+    },
+    {
+      "category": "Exponential and Logarithmic Functions",
+      "count": 97
+    },
+    {
+      "category": "Geometry and Trigonometry",
+      "count": 92
+    },
+    {
+      "category": "Algebra",
+      "count": 88
+    },
+    {
+      "category": "Transformations and Symmetry",
+      "count": 88
+    },
+    {
+      "category": "Coordinate Geometry",
+      "count": 82
+    },
+    {
+      "category": "Advanced Math",
+      "count": 78
+    },
+    {
+      "category": "Problem-Solving and Data Analysis",
+      "count": 76
+    },
+    {
+      "category": "Area and Volume",
+      "count": 74
+    },
+    {
+      "category": "Quadratic Functions and Equations",
+      "count": 72
+    },
+    {
+      "category": "Circles and Arcs",
+      "count": 54
+    }
+  ],
+  "skill_stats": [
+    {
+      "skill": "(empty)",
+      "count": 1679
+    },
+    {
+      "skill": "Command of Evidence",
+      "count": 101
+    },
+    {
+      "skill": "Words in Context",
+      "count": 95
+    },
+    {
+      "skill": "Form, Structure, and Sense",
+      "count": 84
+    },
+    {
+      "skill": "Boundaries",
+      "count": 81
+    },
+    {
+      "skill": "Rhetorical Synthesis",
+      "count": 67
+    },
+    {
+      "skill": "Transitions",
+      "count": 60
+    },
+    {
+      "skill": "Inferences",
+      "count": 55
+    },
+    {
+      "skill": "Text Structure and Purpose",
+      "count": 55
+    },
+    {
+      "skill": "Central Ideas and Details",
+      "count": 35
+    },
+    {
+      "skill": "Cross-Text Connections",
+      "count": 29
+    },
+    {
+      "skill": "Lines, angles, and triangles",
+      "count": 19
+    },
+    {
+      "skill": "Linear equations in two variables",
+      "count": 13
+    },
+    {
+      "skill": "Nonlinear functions",
+      "count": 13
+    },
+    {
+      "skill": "Linear functions",
+      "count": 12
+    },
+    {
+      "skill": "Ratios, rates, proportional relationships, and units",
+      "count": 11
+    },
+    {
+      "skill": "Two-variable data: Models and scatterplots",
+      "count": 10
+    },
+    {
+      "skill": "One-variable data: Distributions and measures of center and spread",
+      "count": 8
+    },
+    {
+      "skill": "Area and volume",
+      "count": 8
+    },
+    {
+      "skill": "Right triangles and trigonometry",
+      "count": 8
+    },
+    {
+      "skill": "Probability and conditional probability",
+      "count": 7
+    },
+    {
+      "skill": "Percentages",
+      "count": 6
+    },
+    {
+      "skill": "Systems of two linear equations in two variables",
+      "count": 6
+    },
+    {
+      "skill": "Linear equations in one variable",
+      "count": 6
+    },
+    {
+      "skill": "Linear inequalities in one or two variables",
+      "count": 5
+    },
+    {
+      "skill": "Circles",
+      "count": 5
+    },
+    {
+      "skill": "Cross-text Connections",
+      "count": 2
+    },
+    {
+      "skill": "Inference from sample statistics and margin of error ",
+      "count": 2
+    },
+    {
+      "skill": "Nonlinear equations in one variable and systems of equations in two variables ",
+      "count": 1
+    }
+  ]
+}

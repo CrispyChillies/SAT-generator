@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAT Flow Demo</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2d2d35;
+      --text: #e8e6e3;
+      --muted: #9b9996;
+      --accent: #7c9cff;
+      --accent-hover: #9bb2ff;
+      --success: #6bcb7d;
+      --error: #e57373;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1.5rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      color: var(--accent);
+    }
+    .form-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .form-row label { font-weight: 500; }
+    input[type="text"] {
+      width: 320px;
+      padding: 0.6rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input[type="text"]::placeholder { color: var(--muted); }
+    button {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .btn-load {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .btn-load:hover { background: var(--accent-hover); }
+    .btn-flow {
+      background: var(--surface);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .btn-flow:hover { background: rgba(124, 156, 255, 0.12); }
+    .btn-flow:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-save {
+      background: var(--success);
+      color: var(--bg);
+    }
+    .btn-save:hover { filter: brightness(1.1); }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem 0;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card .content {
+      font-size: 0.95rem;
+      word-wrap: break-word;
+    }
+    .card .content p { margin: 0.5rem 0; }
+    .card .content math, .card .content .math { font-style: italic; }
+    .loading { color: var(--muted); }
+    .error { color: var(--error); }
+    .success { color: var(--success); }
+    .meta { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
+    #flowResult .steps {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    #flowResult .steps summary { cursor: pointer; }
+    #flowResult .step-item {
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      background: var(--bg);
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+    }
+    #flowResult .answer-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: rgba(107, 203, 125, 0.12);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      color: var(--success);
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SAT Flow Demo</h1>
+    <div class="form-row">
+      <label for="questionId">Question ID</label>
+      <input type="text" id="questionId" placeholder="vd: 06868720-2332-4e01-b188-4f2342bc60a9" />
+      <button type="button" class="btn-load" id="btnLoad">Xem câu gốc</button>
+      <button type="button" class="btn-flow" id="btnFlow" disabled>Chạy flow</button>
+    </div>
+
+    <div class="card" id="originalCard">
+      <h2>Câu gốc (từ questions_practice_test.json)</h2>
+      <div id="originalContent">
+        <span class="loading">Nhập ID và bấm "Xem câu gốc".</span>
+      </div>
+    </div>
+
+    <div class="card hidden" id="flowResult">
+      <h2>Kết quả flow (câu hỏi mới + explanation + đáp án)</h2>
+      <div id="flowContent"></div>
+      <div id="flowActions" class="form-row" style="margin-top: 1rem; margin-bottom: 0;"></div>
+    </div>
+  </div>
+
+  <script>
+    const questionIdEl = document.getElementById("questionId");
+    const btnLoad = document.getElementById("btnLoad");
+    const btnFlow = document.getElementById("btnFlow");
+    const originalContent = document.getElementById("originalContent");
+    const flowResult = document.getElementById("flowResult");
+    const flowContent = document.getElementById("flowContent");
+    const flowActions = document.getElementById("flowActions");
+
+    let currentQuestionId = null;
+    let lastFlowData = null;
+
+    function setHtml(el, html) {
+      if (html == null || html === "") {
+        el.innerHTML = "<span class=\"muted\">—</span>";
+        return;
+      }
+      el.innerHTML = html;
+    }
+
+    btnLoad.addEventListener("click", async () => {
+      const id = questionIdEl.value.trim();
+      if (!id) {
+        originalContent.innerHTML = "<span class=\"error\">Vui lòng nhập Question ID.</span>";
+        return;
+      }
+      originalContent.innerHTML = "<span class=\"loading\">Đang tải...</span>";
+      try {
+        const r = await fetch("/api/question/" + encodeURIComponent(id));
+        const data = await r.json();
+        if (!r.ok) {
+          originalContent.innerHTML = "<span class=\"error\">" + (data.error || "Lỗi " + r.status) + "</span>";
+          btnFlow.disabled = true;
+          return;
+        }
+        currentQuestionId = data.id;
+        btnFlow.disabled = false;
+        let html = "";
+        if (data.category || data.difficulty) {
+          html += "<div class=\"meta\">" + [data.category, data.difficulty].filter(Boolean).join(" · ") + "</div>";
+        }
+        html += "<strong>Câu hỏi</strong><div class=\"content\">" + (data.question_html || "—") + "</div>";
+        if (data.choices && data.choices.length) {
+          html += "<p><strong>Đáp án đúng</strong> (" + (data.correct_answer_letter || "") + "):</p>";
+          html += "<div class=\"content\">" + (data.correct_answer_html || "—") + "</div>";
+        } else {
+          html += "<p><strong>Đáp án đúng</strong>: <span class=\"content\">" + (data.correct_answer_html || "—") + "</span></p>";
+        }
+        html += "<p><strong>Explanation</strong></p><div class=\"content\">" + (data.explanation_html || "—") + "</div>";
+        originalContent.innerHTML = html;
+      } catch (e) {
+        originalContent.innerHTML = "<span class=\"error\">Lỗi: " + e.message + "</span>";
+        btnFlow.disabled = true;
+      }
+    });
+
+    btnFlow.addEventListener("click", async () => {
+      const id = currentQuestionId || questionIdEl.value.trim();
+      if (!id) {
+        flowContent.innerHTML = "<span class=\"error\">Chưa có question ID.</span>";
+        flowResult.classList.remove("hidden");
+        return;
+      }
+      flowResult.classList.remove("hidden");
+      flowContent.innerHTML = "<span class=\"loading\">Đang chạy flow (Agent → steps → gen câu mới + explanation + đáp án)...</span>";
+      btnFlow.disabled = true;
+      try {
+        const r = await fetch("/api/run-flow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question_id: id }),
+        });
+        const data = await r.json();
+        btnFlow.disabled = false;
+
+        if (data.error) {
+          flowContent.innerHTML = "<span class=\"error\">" + data.error + "</span>";
+          return;
+        }
+
+        let html = "";
+        html += "<p><strong>Câu hỏi mới</strong></p>";
+        html += "<div class=\"content\">" + (data.new_question_text || "—") + "</div>";
+        if (data.new_choices_html && data.new_choices_html.length === 4) {
+          const letters = ["A", "B", "C", "D"];
+          const correctLetter = (data.new_correct_answer_letter || "").toUpperCase();
+          html += "<p><strong>4 đáp án (multiple-choice)</strong></p>";
+          html += "<ul class=\"choices-list\" style=\"list-style: none; padding-left: 0;\">";
+          data.new_choices_html.forEach((choiceHtml, i) => {
+            const letter = letters[i];
+            const isCorrect = letter === correctLetter;
+            html += "<li class=\"choice-item\" style=\"margin: 0.5rem 0; padding: 0.5rem; border-radius: 6px; " + (isCorrect ? "background: rgba(107, 203, 125, 0.15); border: 1px solid var(--success);" : "background: var(--bg); border: 1px solid var(--border);") + "\">";
+            html += "<strong>" + letter + (isCorrect ? " ✓ (đúng)" : "") + ".</strong> ";
+            html += "<span class=\"content\">" + choiceHtml + "</span>";
+            html += "</li>";
+          });
+          html += "</ul>";
+        } else if (data.new_correct_answer_html) {
+          html += "<p><strong>Đáp án (gen từ C)</strong></p>";
+          html += "<div class=\"content\">" + data.new_correct_answer_html + "</div>";
+        }
+        if (data.new_explanation_html) {
+          html += "<p><strong>Explanation (gen từ C)</strong></p>";
+          html += "<div class=\"content\">" + data.new_explanation_html + "</div>";
+        }
+
+        const ar = data.answer_result;
+        if (ar) {
+          if (ar.final_result != null) {
+            html += "<div class=\"answer-box\"><strong>Đáp án (final_result)</strong>: " + ar.final_result + "</div>";
+          }
+          if (ar.answer_text) {
+            html += "<p><strong>Answer text</strong>: " + escapeHtml(ar.answer_text) + "</p>";
+          }
+          if (ar.steps_detail && ar.steps_detail.length) {
+            html += "<details class=\"steps\"><summary>Steps (" + ar.steps_detail.length + ")</summary>";
+            ar.steps_detail.forEach((s, i) => {
+              html += "<div class=\"step-item\">";
+              html += "Step " + (s.step_number || i + 1);
+              if (s.tool_name) html += " · " + s.tool_name;
+              if (s.tool_input) html += " · " + escapeHtml(JSON.stringify(s.tool_input));
+              if (s.tool_output != null) html += " → " + s.tool_output;
+              html += "</div>";
+            });
+            html += "</details>";
+          }
+          if (ar.error) {
+            html += "<p class=\"error\">" + escapeHtml(ar.error) + "</p>";
+          }
+        } else {
+          html += "<p class=\"muted\">Không có answer_result.</p>";
+        }
+        flowContent.innerHTML = html;
+
+        lastFlowData = data;
+        flowActions.innerHTML = "";
+        if (data.answers_match === true && data.new_question_item) {
+          const btnSave = document.createElement("button");
+          btnSave.type = "button";
+          btnSave.className = "btn-save";
+          btnSave.id = "btnSave";
+          btnSave.textContent = "Save sample";
+          btnSave.addEventListener("click", async () => {
+            btnSave.disabled = true;
+            btnSave.textContent = "Đang lưu...";
+            try {
+              const r = await fetch("/api/save-question", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ new_question_item: data.new_question_item }),
+              });
+              const res = await r.json();
+              if (r.ok && res.ok) {
+                flowActions.innerHTML = "<span class=\"success\">Đã lưu: " + escapeHtml(res.filename || res.saved_path || "OK") + "</span>";
+              } else {
+                flowActions.innerHTML = "<span class=\"error\">Lỗi: " + escapeHtml(res.error || r.status) + "</span>";
+                btnSave.disabled = false;
+                btnSave.textContent = "Save sample";
+              }
+            } catch (e) {
+              flowActions.innerHTML = "<span class=\"error\">Lỗi: " + escapeHtml(e.message) + "</span>";
+              btnSave.disabled = false;
+              btnSave.textContent = "Save sample";
+            }
+          });
+          flowActions.appendChild(btnSave);
+        } else if (data.answers_match === false) {
+          flowActions.innerHTML = "<span class=\"muted\">Đáp án C và D chưa khớp → không hiện nút Save.</span>";
+        }
+      } catch (e) {
+        btnFlow.disabled = false;
+        flowContent.innerHTML = "<span class=\"error\">Lỗi: " + e.message + "</span>";
+      }
+    });
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

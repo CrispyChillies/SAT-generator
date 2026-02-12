@@ -1,0 +1,223 @@
+import os
+from langchain_classic.tools import StructuredTool
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
+from typing import Optional, Union, Literal
+import numpy as np
+import sympy as sp
+
+# Lazy-initialized LLM for step-generation tool (uses OPENAI_API_KEY from env)
+_llm_step = None
+
+def _get_step_llm():
+    global _llm_step
+    if _llm_step is None:
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY must be set to use llm_generate_step tool")
+        _llm_step = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+    return _llm_step
+
+# Pydantic models for tool inputs
+class BinaryOpInput(BaseModel):
+    a: float = Field(description="First number")
+    b: float = Field(description="Second number")
+
+class UnaryOpInput(BaseModel):
+    x: float = Field(description="Input number")
+
+class PowerInput(BaseModel):
+    x: float = Field(description="Base number")
+    n: float = Field(description="Exponent")
+
+class IntegralInput(BaseModel):
+    expr_str: str = Field(description="Expression as string, e.g., 'x**2 + 2*x'")
+    var: str = Field(description="Variable to integrate with respect to, e.g., 'x'")
+    lower: Optional[float] = Field(default=None, description="Lower bound for definite integral")
+    upper: Optional[float] = Field(default=None, description="Upper bound for definite integral")
+
+class DerivativeInput(BaseModel):
+    expr_str: str = Field(description="Expression as string, e.g., 'x**2 + 2*x'")
+    var: str = Field(description="Variable to differentiate with respect to, e.g., 'x'")
+
+class TrigInput(BaseModel):
+    func: Literal["sin", "cos", "tan"] = Field(description="Trigonometric function: 'sin', 'cos', or 'tan'")
+    x: float = Field(description="Input angle in radians")
+
+class StepRequirementInput(BaseModel):
+    requirement: str = Field(
+        description="Non-computational requirement for the current step (e.g. write an equation that models a constraint, state which formula applies, or give short reasoning to choose an answer). If the question has multiple steps, pass exactly one step's requirement per call."
+    )
+
+# Tool functions
+def add_numbers(a: float, b: float) -> float:
+    """Add two numbers together."""
+    return a + b
+
+def subtract_numbers(a: float, b: float) -> float:
+    """Subtract b from a."""
+    return a - b
+
+def multiply_numbers(a: float, b: float) -> float:
+    """Multiply two numbers."""
+    return a * b
+
+def divide_numbers(a: float, b: float) -> float:
+    """Divide a by b."""
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
+
+def power_or_exponential(base: Optional[float], exponent: float) -> float:
+    """Calculate base^exponent. If base is not provided, calculates e^exponent (natural exponential)."""
+    if base is None:
+        return float(np.exp(exponent))
+    return float(base ** exponent)
+
+def natural_log(x: float) -> float:
+    """Calculate natural logarithm ln(x)."""
+    if x <= 0:
+        raise ValueError("Logarithm undefined for non-positive numbers")
+    return float(np.log(x))
+
+def square_root(x: float) -> float:
+    """Calculate square root of x."""
+    if x < 0:
+        raise ValueError("Square root undefined for negative numbers")
+    return float(np.sqrt(x))
+
+def trig_func(func: str, x: float) -> float:
+    """Calculate sin(x), cos(x), or tan(x) (x in radians)."""
+    if func == "sin":
+        return float(np.sin(x))
+    if func == "cos":
+        return float(np.cos(x))
+    if func == "tan":
+        return float(np.tan(x))
+    raise ValueError(f"Unknown trig function: {func}")
+
+def derivative_func(expr_str: str, var: str) -> str:
+    """
+    Calculate the derivative of an expression.
+    Returns the derivative as a string.
+    """
+    try:
+        var_symbol = sp.Symbol(var)
+        expr = sp.sympify(expr_str)
+        result = sp.diff(expr, var_symbol)
+        return str(result)
+    except Exception as e:
+        raise ValueError(f"Error computing derivative: {str(e)}")
+
+def integral_func(expr_str: str, var: str, lower: Optional[float] = None, upper: Optional[float] = None) -> Union[str, float]:
+    """
+    Calculate the integral of an expression.
+    If lower and upper bounds are provided, returns definite integral (float).
+    Otherwise returns indefinite integral (string).
+    """
+    try:
+        var_symbol = sp.Symbol(var)
+        expr = sp.sympify(expr_str)
+        result = sp.integrate(expr, var_symbol)
+        
+        if lower is not None and upper is not None:
+            value = float(result.subs(var_symbol, upper) - result.subs(var_symbol, lower))
+            return value
+        return str(result)
+    except Exception as e:
+        raise ValueError(f"Error computing integral: {str(e)}")
+
+# ---------------------------------------------------------------------------
+# LLM-based step output for non-computational requirements (equations, reasoning, etc.)
+# ---------------------------------------------------------------------------
+
+def llm_generate_step(requirement: str) -> str:
+    """
+    Use an LLM to generate the output for a step whose requirement is NOT computational. For multi-step questions, pass one step's requirement
+    per call. Do not use this for numeric calculation—use add, multiply, etc. instead.
+    """
+    requirement = (requirement or "").strip()
+    if not requirement:
+        return "Error: requirement cannot be empty."
+    llm = _get_step_llm()
+    prompt = (
+        "You are a precise math assistant. For the current step, the requirement is:\n\n"
+        f"{requirement}\n\n"
+        "Produce ONLY the output that satisfies this requirement. Use standard math notation. "
+        "No extra preamble or explanation—just the required output."
+    )
+    response = llm.invoke([HumanMessage(content=prompt)])
+    print(response)
+    if hasattr(response, "content") and response.content:
+        return response.content.strip()
+    return str(response)
+
+# Create LangChain tools
+math_tools = [
+    StructuredTool.from_function(
+        func=add_numbers,
+        name="add",
+        description="Add two numbers together. Use this for addition operations.",
+        args_schema=BinaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=subtract_numbers,
+        name="subtract",
+        description="Subtract the second number from the first. Use this for subtraction operations.",
+        args_schema=BinaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=multiply_numbers,
+        name="multiply",
+        description="Multiply two numbers. Use this for multiplication operations.",
+        args_schema=BinaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=divide_numbers,
+        name="divide",
+        description="Divide the first number by the second. Use this for division operations.",
+        args_schema=BinaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=power_or_exponential,
+        name="power",
+        description="Compute exponentiation: use base=null (or omit base) for e^exponent (natural exponential); use base and exponent for base^exponent. Use for both e^x and x^n.",
+        args_schema=PowerInput
+    ),
+    StructuredTool.from_function(
+        func=natural_log,
+        name="log",
+        description="Calculate natural logarithm (ln) of x. Use this for logarithmic operations.",
+        args_schema=UnaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=square_root,
+        name="sqrt",
+        description="Calculate square root of x. Use this for square root operations.",
+        args_schema=UnaryOpInput
+    ),
+    StructuredTool.from_function(
+        func=trig_func,
+        name="trig",
+        description="Compute sin(x), cos(x), or tan(x). Set func to 'sin', 'cos', or 'tan'; x is the angle in radians.",
+        args_schema=TrigInput
+    ),
+    StructuredTool.from_function(
+        func=derivative_func,
+        name="derivative",
+        description="Calculate the derivative of a mathematical expression. Returns symbolic result.",
+        args_schema=DerivativeInput
+    ),
+    StructuredTool.from_function(
+        func=integral_func,
+        name="integral",
+        description="Calculate integral of a mathematical expression. Can compute definite or indefinite integrals.",
+        args_schema=IntegralInput
+    ),
+    StructuredTool.from_function(
+        func=llm_generate_step,
+        name="llm_generate_step",
+        description="Use when the requirement is not computational. Input: requirement (string) for this step only; one step per call for multi-step questions. Do not use for numeric computation—use add, multiply, sqrt, etc. instead.",
+        args_schema=StepRequirementInput
+    ),
+]
