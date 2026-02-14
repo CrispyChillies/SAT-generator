@@ -551,11 +551,17 @@ if __name__ == "__main__":
         verbose=True
     )
     
-    question = "A drone is <math><mn>120</mn></math> m horizontally from the base of a tower. The angle of elevation from the drone to the top of the tower is <math><mn>30</mn><mo>°</mo></math>. Approximately how tall is the tower (to the nearest meter)?"
+    # question = "A drone is <math><mn>120</mn></math> m horizontally from the base of a tower. The angle of elevation from the drone to the top of the tower is <math><mn>30</mn><mo>°</mo></math>. Approximately how tall is the tower (to the nearest meter)?"
     
-    explanation = "Use <math><mi>tan</mi><mi>θ</mi><mo>=</mo><mfrac><mi>opp</mi><mi>adj</mi></mfrac></math>. Here <math><mi>tan</mi><mn>30</mn><mo>°</mo><mo>=</mo><mfrac><mi>h</mi><mn>120</mn></mfrac></math>, so <math><mi>h</mi><mo>=</mo><mn>120</mn><mi>tan</mi><mn>30</mn><mo>°</mo></math>. Since <math><mi>tan</mi><mn>30</mn><mo>°</mo><mo>≈</mo><mn>0.577</mn></math>, <math><mi>h</mi><mo>≈</mo><mn>120</mn><mo>×</mo><mn>0.577</mn><mo>≈</mo><mn>69</mn></math> m."
+    # explanation = "Use <math><mi>tan</mi><mi>θ</mi><mo>=</mo><mfrac><mi>opp</mi><mi>adj</mi></mfrac></math>. Here <math><mi>tan</mi><mn>30</mn><mo>°</mo><mo>=</mo><mfrac><mi>h</mi><mn>120</mn></mfrac></math>, so <math><mi>h</mi><mo>=</mo><mn>120</mn><mi>tan</mi><mn>30</mn><mo>°</mo></math>. Since <math><mi>tan</mi><mn>30</mn><mo>°</mo><mo>≈</mo><mn>0.577</mn></math>, <math><mi>h</mi><mo>≈</mo><mn>120</mn><mo>×</mo><mn>0.577</mn><mo>≈</mo><mn>69</mn></math> m."
     
-    correct_answer = "<math><mn>69</mn></math>"
+    # correct_answer = "<math><mn>69</mn></math>"
+
+    question = "The line graph shows the percent of cars for sale at a used car lot on a given day by model year. The line graph: Begins at 2010, 12% Remains level to 2011, 12% Remains level to 2012, 12% Falls sharply to 2013, 8% Falls sharply to 2014, 4% Rises sharply to 2015, 9% Rises gradually to 2016, 10% Remains level to 2017, 10% Rises gradually to 2018, 11% Remains level to 2019, 11% For what model year is the percent of cars for sale the smallest?"
+
+    explanation = "Choice C is correct. For the given line graph, the percent of cars for sale at a used car lot on a given day is represented on the vertical axis. The percent of cars for sale is the smallest when the height of the line graph is the lowest. The lowest height of the line graph occurs for cars with a model year of 2014. Choice A is incorrect and may result from conceptual errors. Choice B is incorrect and may result from conceptual errors. Choice D is incorrect and may result from conceptual errors."
+
+    correct_answer = "2014"
     
     print("\n🧪 TEST WITH LANGGRAPH AGENT")
     trace = agent.solve(

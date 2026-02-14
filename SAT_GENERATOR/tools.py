@@ -3,7 +3,7 @@ from langchain_classic.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
-from typing import Optional, Union, Literal
+from typing import Optional, Union, Literal,  List, Dict, Union
 import numpy as np
 import sympy as sp
 
@@ -48,6 +48,12 @@ class StepRequirementInput(BaseModel):
     requirement: str = Field(
         description="Non-computational requirement for the current step (e.g. write an equation that models a constraint, state which formula applies, or give short reasoning to choose an answer). If the question has multiple steps, pass exactly one step's requirement per call."
     )
+
+class MinListInput(BaseModel):
+    numbers: List[float] = Field(description="List of numbers to find the minimum value.")
+
+class MinDictInput(BaseModel):
+    data: Dict[str, float] = Field(description="Dictionary mapping keys to numbers.")
 
 # Tool functions
 def add_numbers(a: float, b: float) -> float:
@@ -126,6 +132,27 @@ def integral_func(expr_str: str, var: str, lower: Optional[float] = None, upper:
         return str(result)
     except Exception as e:
         raise ValueError(f"Error computing integral: {str(e)}")
+    
+def find_min_in_list(numbers: List[float]) -> dict:
+    """
+    Find the minimum value in a list of numbers.
+    Returns a dict with 'min_value' and 'index'.
+    """
+    if not numbers:
+        raise ValueError("Input list is empty.")
+    min_value = min(numbers)
+    index = numbers.index(min_value)
+    return {"min_value": min_value, "index": index}
+
+def find_min_in_dict(data: Dict[str, float]) -> dict:
+    """
+    Find the key with the minimum value in a dictionary.
+    Returns a dict with 'min_key' and 'min_value'.
+    """
+    if not data:
+        raise ValueError("Input dictionary is empty.")
+    min_key = min(data, key=data.get)
+    return {"min_key": min_key, "min_value": data[min_key]}
 
 # ---------------------------------------------------------------------------
 # LLM-based step output for non-computational requirements (equations, reasoning, etc.)
@@ -221,3 +248,18 @@ math_tools = [
         args_schema=StepRequirementInput
     ),
 ]
+
+math_tools.extend([
+    StructuredTool.from_function(
+        func=find_min_in_list,
+        name="find_min_in_list",
+        description="Find the minimum value in a list of numbers. Returns the value and its index.",
+        args_schema=MinListInput
+    ),
+    StructuredTool.from_function(
+        func=find_min_in_dict,
+        name="find_min_in_dict",
+        description="Find the key with the minimum value in a dictionary. Returns the key and value.",
+        args_schema=MinDictInput
+    ),
+])
