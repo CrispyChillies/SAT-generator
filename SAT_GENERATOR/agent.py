@@ -467,8 +467,8 @@ Output ONLY the JSON array:"""
         Returns:
             ExecutionTrace with complete solving history
         """
-        readable = self.parser.parse(mathml_explanation)
-        question_text = self.parser.parse(question) if question else question
+        readable = self.parser.parse(mathml_explanation)['text']
+        question_text = self.parser.parse(question)['text'] if question else question
 
         trace = ExecutionTrace(
             problem_description=readable,

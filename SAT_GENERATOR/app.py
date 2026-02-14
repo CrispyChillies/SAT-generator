@@ -86,7 +86,6 @@ def get_question(question_id: str):
         return jsonify({"error": str(e)}), 404
 
     q_block = sample.get("question") or {}
-    print("question block:", q_block)
     correct_answer_raw = q_block.get("correct_answer") or sample.get("correct_answer")
     correct_answer_display = preprocess_correct_answer(sample)
 

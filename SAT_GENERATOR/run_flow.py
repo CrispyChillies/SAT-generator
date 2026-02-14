@@ -148,7 +148,11 @@ def run_flow(
             "answer_result": None,
         }
 
-    question_text = parser.parse(question_html) if question_html else question_html
+    # question_text = parser.parse(question_html) if question_html else question_html
+    parsed = parser.parse(question_html) if question_html else question_html
+    question_text = parsed['text']
+    graph = parsed['graph']
+
     result_bag = {
         "steps_json_path": str(steps_path),
         "new_question_item": None,

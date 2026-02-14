@@ -165,7 +165,7 @@ def solve_with_steps(
         }
 
     parser = parser or MathMLParser()
-    question_text = parser.parse(question) if question else ""
+    question_text = parser.parse(question)['text'] if question else ""
     if not question_text:
         question_text = question
 

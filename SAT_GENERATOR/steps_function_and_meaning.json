@@ -6,7 +6,21 @@
       "params_meaning": [
         {
           "param": "numbers",
-          "meaning": "a list of percentage values representing the proportion of cars for sale for each model year"
+          "meaning": "a list of percentage values representing the proportion of cars for sale by model year"
+        }
+      ]
+    },
+    {
+      "step_number": 2,
+      "function_name": "add",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the starting model year in the range"
+        },
+        {
+          "param": "b",
+          "meaning": "the offset or number of years added to the starting year"
         }
       ]
     }
