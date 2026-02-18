@@ -165,26 +165,116 @@ def _generate_line_graph_svg(
     return svg_string
 
 
+def _generate_bar_graph_svg(
+    x_values: List[int],
+    y_values: List[float],
+    x_label: str = "Group",
+    y_label: str = "Number of books collected",
+    y_unit: str = "",
+    width: float = 8,
+    height: float = 5,
+) -> str:
+    """
+    Tạo bar graph SVG bằng matplotlib.
+    
+    Args:
+        x_values: Danh sách giá trị trục x (vd: group 1, 2, 3, 4)
+        y_values: Danh sách giá trị trục y (vd: số lượng)
+        x_label: Nhãn trục x
+        y_label: Nhãn trục y
+        y_unit: Đơn vị y (vd: "", "books")
+        width: Chiều rộng đồ thị (inches)
+        height: Chiều cao đồ thị (inches)
+    
+    Returns:
+        SVG string của đồ thị
+    """
+    # Tạo figure với kích thước phù hợp
+    fig, ax = plt.subplots(figsize=(width, height))
+    
+    # Vẽ bar graph
+    bars = ax.bar(x_values, y_values, color='gray', edgecolor='black', linewidth=1.5, width=0.6)
+    
+    # Thiết lập labels
+    ax.set_xlabel(x_label, fontsize=11)
+    ax.set_ylabel(y_label, fontsize=11)
+    
+    # Thiết lập trục x - hiển thị tất cả giá trị
+    ax.set_xticks(x_values)
+    ax.set_xticklabels([str(x) for x in x_values])
+    
+    # Thiết lập trục y - từ 0 đến max + buffer
+    y_max = max(y_values)
+    # Round up to nearest 10 for bar graphs (usually larger numbers)
+    if y_max <= 20:
+        y_axis_max = int((y_max // 5 + 1) * 5)
+        tick_interval = 5
+    else:
+        y_axis_max = int((y_max // 10 + 1) * 10)
+        tick_interval = 10
+    
+    ax.set_ylim(0, y_axis_max)
+    ax.set_yticks(range(0, y_axis_max + 1, tick_interval))
+    if y_unit:
+        ax.set_yticklabels([f"{y}{y_unit}" for y in range(0, y_axis_max + 1, tick_interval)])
+    
+    # Thêm grid (chỉ trục y)
+    ax.grid(True, axis='y', linestyle='-', alpha=0.7)
+    ax.set_axisbelow(True)
+    
+    # Tight layout để tránh cắt labels
+    plt.tight_layout()
+    
+    # Export to SVG string
+    svg_buffer = io.BytesIO()
+    fig.savefig(svg_buffer, format='svg', bbox_inches='tight')
+    plt.close(fig)  # Đóng figure để giải phóng memory
+    
+    svg_buffer.seek(0)
+    svg_string = svg_buffer.getvalue().decode('utf-8')
+    
+    # Loại bỏ XML declaration và DOCTYPE nếu có
+    svg_string = re.sub(r'<\?xml[^>]*\?>', '', svg_string)
+    svg_string = re.sub(r'<!DOCTYPE[^>]*>', '', svg_string)
+    svg_string = svg_string.strip()
+    
+    return svg_string
+
+
 def _generate_aria_label(
     x_values: List[int],
     y_values: List[float],
     x_label: str = "Model year",
     y_label: str = "Percent of cars for sale",
     y_unit: str = "%",
+    graph_type: str = "line",
 ) -> str:
     """
     Tạo aria-label cho đồ thị (accessibility).
     """
     x_min, x_max = min(x_values), max(x_values)
     y_max = max(y_values)
-    y_axis_max = int((y_max // 5 + 1) * 5)
+    
+    # Determine tick interval based on graph type and y_max
+    if graph_type == "bar":
+        if y_max <= 20:
+            y_axis_max = int((y_max // 5 + 1) * 5)
+            tick_interval = 5
+        else:
+            y_axis_max = int((y_max // 10 + 1) * 10)
+            tick_interval = 10
+    else:  # line graph
+        y_axis_max = int((y_max // 5 + 1) * 5)
+        tick_interval = 5
+    
+    graph_type_text = "bar graph" if graph_type == "bar" else "line graph"
     
     return (
-        f"A line graph. The horizontal axis is labeled {x_label}. "
+        f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
         f"It ranges from {x_min} to {x_max} in increments of 1. "
         f"The vertical axis is labeled {y_label}. "
         f"It ranges from 0{y_unit} to {y_axis_max}{y_unit} in increments of 1, "
-        f"with values marked every 5 grid lines. Refer to long description."
+        f"with values marked every {tick_interval} grid lines. Refer to long description."
     )
 
 
@@ -198,6 +288,7 @@ def _update_graph_in_html(
     x_label: str = "Model year",
     y_label: str = "Percent of cars for sale",
     y_unit: str = "%",
+    graph_type: str = "line",
 ) -> str:
     """
     Thay thế SVG cũ bằng SVG mới được tạo từ matplotlib và cập nhật long description.
@@ -212,20 +303,30 @@ def _update_graph_in_html(
         x_label: Nhãn trục x
         y_label: Nhãn trục y
         y_unit: Đơn vị y
+        graph_type: Loại đồ thị ("line" hoặc "bar")
     
     Returns:
         HTML với SVG mới và long description đã cập nhật
     """
     result = original_html
     
-    # 1. Tạo SVG mới bằng matplotlib
-    new_svg = _generate_line_graph_svg(
-        x_values=new_x_values,
-        y_values=new_y_values,
-        x_label=x_label,
-        y_label=y_label,
-        y_unit=y_unit,
-    )
+    # 1. Tạo SVG mới bằng matplotlib (tùy loại đồ thị)
+    if graph_type == "bar":
+        new_svg = _generate_bar_graph_svg(
+            x_values=new_x_values,
+            y_values=new_y_values,
+            x_label=x_label,
+            y_label=y_label,
+            y_unit=y_unit,
+        )
+    else:  # line graph (default)
+        new_svg = _generate_line_graph_svg(
+            x_values=new_x_values,
+            y_values=new_y_values,
+            x_label=x_label,
+            y_label=y_label,
+            y_unit=y_unit,
+        )
     
     # 2. Tạo aria-label mới cho accessibility
     new_aria_label = _generate_aria_label(
@@ -234,6 +335,7 @@ def _update_graph_in_html(
         x_label=x_label,
         y_label=y_label,
         y_unit=y_unit,
+        graph_type=graph_type,
     )
     
     # 3. Thêm aria-label vào SVG mới
@@ -525,6 +627,8 @@ def generate_new_question(
             # Loại bỏ SVG và long description khỏi HTML để giảm token
             # Long description sẽ được xử lý riêng và chèn vào figure block
             question_text_no_svg = _remove_svg_and_long_desc_from_html(original_html)
+
+            print("Question text without SVG:", question_text_no_svg)
             
             # Convert GraphSpec to dict for JSON serialization
             graph_spec_dict = {
@@ -583,6 +687,7 @@ def generate_new_question(
                 x_label=graph_spec.x_label or "Model year",
                 y_label=graph_spec.y_label or "Percent",
                 y_unit=graph_spec.y_unit or "%",
+                graph_type=graph_spec.graph_type or "line",
             )
             
             # Trích xuất figure block (SVG + long_description) từ HTML đã cập nhật
@@ -800,5 +905,5 @@ if __name__ == "__main__":
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.0)
     new_q = generate_new_question(graph_data, llm=llm)  # Truyền full object
     
-    with open("new_question.json", "w", encoding="utf-8") as f:
-        json.dump(new_q, f, ensure_ascii=False, indent=2)
+    # with open("new_question.json", "w", encoding="utf-8") as f:
+    #     json.dump(new_q, f, ensure_ascii=False, indent=2)

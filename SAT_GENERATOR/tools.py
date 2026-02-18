@@ -52,8 +52,20 @@ class MinWithLabelsInput(BaseModel):
     values: List[float] = Field(description="List of values (e.g., percentages) to find minimum.")
     labels: List[Union[int, float, str]] = Field(description="List of labels (e.g., years like [2015, 2016, 2017]) corresponding to each value. Must have same length as values.")
 
-class MinDictInput(BaseModel):
-    data: Dict[str, float] = Field(description="Dictionary mapping keys to numbers.")
+class MaxWithLabelsInput(BaseModel):
+    values: List[float] = Field(description="List of values (e.g., percentages) to find maximum.")
+    labels: List[Union[int, float, str]] = Field(description="List of labels (e.g., years like [2015, 2016, 2017]) corresponding to each value. Must have same length as values.")
+
+class GetValueAtLabelInput(BaseModel):
+    values: List[float] = Field(description="List of values from the graph (e.g., [30, 62, 36, 50, ...])")
+    labels: List[Union[int, float, str]] = Field(description="List of labels from the graph (e.g., [1, 2, 3, 4, ...] for Group 1, Group 2, etc.)")
+    target_label: Union[int, float, str] = Field(description="The specific label to look up (e.g., 1 for Group 1, 2015 for year 2015)")
+
+class SumValuesInput(BaseModel):
+    values: List[float] = Field(description="List of values to sum")
+
+class AverageValuesInput(BaseModel):
+    values: List[float] = Field(description="List of values to calculate average")
 
 # Tool functions
 def add_numbers(a: float, b: float) -> float:
@@ -155,15 +167,88 @@ def find_min_with_labels(values: List[float], labels: List[Union[int, float, str
     index = values.index(min_value)
     return labels[index]
 
-def find_min_in_dict(data: Dict[str, float]) -> dict:
+def find_max_with_labels(values: List[float], labels: List[Union[int, float, str]]) -> Union[int, float, str]:
     """
-    Find the key with the minimum value in a dictionary.
-    Returns a dict with 'min_key' and 'min_value'.
+    ALWAYS USE THIS TOOL for finding minimum/maximum values in a list with labels.
+    This is the PRIMARY tool for graph/chart questions asking "which year/label has the smallest/largest value".
+    
+    Returns the label (e.g., year) corresponding to the maximum value directly.
+    
+    Example:
+        Input: values=[15, 14, 3, 7], labels=[2010, 2011, 2012, 2013]
+        Output: 2010
+        
+        The answer is the label (2010), NOT the index or max_value.
     """
-    if not data:
-        raise ValueError("Input dictionary is empty.")
-    min_key = min(data, key=data.get)
-    return {"min_key": min_key, "min_value": data[min_key]}
+    if not values:
+        raise ValueError("Input values list is empty.")
+    if len(values) != len(labels):
+        raise ValueError(f"values and labels must have same length. Got {len(values)} values and {len(labels)} labels.")
+    
+    max_value = max(values)
+    index = values.index(max_value)
+    return labels[index]
+
+def get_value_at_label(values: List[float], labels: List[Union[int, float, str]], target_label: Union[int, float, str]) -> float:
+    """
+    ALWAYS USE THIS TOOL for reading a specific value from a graph/chart at a given label.
+    This is the PRIMARY tool for questions like "How many books were collected by group 1?" or "What was the value in 2015?".
+    
+    Returns the value at the specified label.
+    
+    Example:
+        Input: values=[30, 62, 36, 50], labels=[1, 2, 3, 4], target_label=1
+        Output: 30.0
+        
+        The answer is the value (30.0) at Group 1.
+    """
+    if not values:
+        raise ValueError("Input values list is empty.")
+    if len(values) != len(labels):
+        raise ValueError(f"values and labels must have same length. Got {len(values)} values and {len(labels)} labels.")
+    
+    # Try to find exact match first
+    try:
+        index = labels.index(target_label)
+        return float(values[index])
+    except ValueError:
+        # If target_label is numeric, try converting labels to same type
+        try:
+            if isinstance(target_label, (int, float)):
+                for i, label in enumerate(labels):
+                    if isinstance(label, (int, float)) and label == target_label:
+                        return float(values[i])
+                    elif str(label) == str(target_label):
+                        return float(values[i])
+            raise ValueError(f"Label '{target_label}' not found in labels list: {labels}")
+        except:
+            raise ValueError(f"Label '{target_label}' not found in labels list: {labels}")
+
+def sum_values(values: List[float]) -> float:
+    """
+    Calculate the sum of all values in a list.
+    Use for questions like "What is the total number of books collected?"
+    
+    Example:
+        Input: values=[30, 62, 36, 50, 46, 40, 54, 60, 16, 20]
+        Output: 414.0
+    """
+    if not values:
+        raise ValueError("Input values list is empty.")
+    return float(sum(values))
+
+def average_values(values: List[float]) -> float:
+    """
+    Calculate the average (mean) of all values in a list.
+    Use for questions like "What is the average number of books per group?"
+    
+    Example:
+        Input: values=[30, 62, 36, 50, 46, 40, 54, 60, 16, 20]
+        Output: 41.4
+    """
+    if not values:
+        raise ValueError("Input values list is empty.")
+    return float(sum(values) / len(values))
 
 # ---------------------------------------------------------------------------
 # LLM-based step output for non-computational requirements (equations, reasoning, etc.)
@@ -268,9 +353,27 @@ math_tools.extend([
         args_schema=MinWithLabelsInput
     ),
     StructuredTool.from_function(
-        func=find_min_in_dict,
-        name="find_min_in_dict",
-        description="Find the key with the minimum value in a dictionary. Returns the key and value.",
-        args_schema=MinDictInput
+        func=find_max_with_labels,
+        name="find_max_with_labels",
+        description="PREFERRED for graph problems with years/labels. Pass values (e.g., percentages) and labels (e.g., years [2015, 2016, 2017]). Returns the label (year) directly with max value. No index calculation needed.",
+        args_schema=MaxWithLabelsInput
+    ),
+    StructuredTool.from_function(
+        func=get_value_at_label,
+        name="get_value_at_label",
+        description="PREFERRED for reading a specific value from a graph at a given label. Use for questions like 'How many books were collected by group 1?' Pass values, labels, and target_label (e.g., 1 for Group 1). Returns the value at that label.",
+        args_schema=GetValueAtLabelInput
+    ),
+    StructuredTool.from_function(
+        func=sum_values,
+        name="sum_values",
+        description="Calculate the sum of all values in a list. Use for questions asking for the total (e.g., 'What is the total number of books?'). Returns the sum.",
+        args_schema=SumValuesInput
+    ),
+    StructuredTool.from_function(
+        func=average_values,
+        name="average_values",
+        description="Calculate the average (mean) of all values in a list. Use for questions asking for the average/mean (e.g., 'What is the average per group?'). Returns the average.",
+        args_schema=AverageValuesInput
     ),
 ])

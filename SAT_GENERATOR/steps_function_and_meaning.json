@@ -2,145 +2,19 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "llm_generate_step",
-      "params_meaning": [
-        {
-          "param": "2018",
-          "meaning": "the percentage of cars for sale from the model year 2018"
-        },
-        {
-          "param": "2019",
-          "meaning": "the percentage of cars for sale from the model year 2019"
-        },
-        {
-          "param": "2020",
-          "meaning": "the percentage of cars for sale from the model year 2020"
-        },
-        {
-          "param": "2021",
-          "meaning": "the percentage of cars for sale from the model year 2021"
-        },
-        {
-          "param": "2022",
-          "meaning": "the percentage of cars for sale from the model year 2022"
-        }
-      ]
-    },
-    {
-      "step_number": 2,
-      "function_name": "llm_generate_step",
-      "params_meaning": [
-        {
-          "param": "2018",
-          "meaning": "the percentage of cars for sale from the model year 2018"
-        },
-        {
-          "param": "2019",
-          "meaning": "the percentage of cars for sale from the model year 2019"
-        },
-        {
-          "param": "2020",
-          "meaning": "the percentage of cars for sale from the model year 2020"
-        },
-        {
-          "param": "2021",
-          "meaning": "the percentage of cars for sale from the model year 2021"
-        },
-        {
-          "param": "2022",
-          "meaning": "the percentage of cars for sale from the model year 2022"
-        }
-      ]
-    },
-    {
-      "step_number": 3,
-      "function_name": "llm_generate_step",
-      "params_meaning": [
-        {
-          "param": "2018",
-          "meaning": "the percentage of cars for sale from the model year 2018"
-        },
-        {
-          "param": "2019",
-          "meaning": "the percentage of cars for sale from the model year 2019"
-        },
-        {
-          "param": "2020",
-          "meaning": "the percentage of cars for sale from the model year 2020"
-        },
-        {
-          "param": "2021",
-          "meaning": "the percentage of cars for sale from the model year 2021"
-        },
-        {
-          "param": "2022",
-          "meaning": "the percentage of cars for sale from the model year 2022"
-        }
-      ]
-    },
-    {
-      "step_number": 4,
-      "function_name": "llm_generate_step",
-      "params_meaning": [
-        {
-          "param": "2018",
-          "meaning": "the percentage of cars for sale from the model year 2018"
-        },
-        {
-          "param": "2019",
-          "meaning": "the percentage of cars for sale from the model year 2019"
-        },
-        {
-          "param": "2020",
-          "meaning": "the percentage of cars for sale from the model year 2020"
-        },
-        {
-          "param": "2021",
-          "meaning": "the percentage of cars for sale from the model year 2021"
-        },
-        {
-          "param": "2022",
-          "meaning": "the percentage of cars for sale from the model year 2022"
-        }
-      ]
-    },
-    {
-      "step_number": 5,
-      "function_name": "llm_generate_step",
-      "params_meaning": [
-        {
-          "param": "2018",
-          "meaning": "the percentage of cars for sale from the model year 2018"
-        },
-        {
-          "param": "2019",
-          "meaning": "the percentage of cars for sale from the model year 2019"
-        },
-        {
-          "param": "2020",
-          "meaning": "the percentage of cars for sale from the model year 2020"
-        },
-        {
-          "param": "2021",
-          "meaning": "the percentage of cars for sale from the model year 2021"
-        },
-        {
-          "param": "2022",
-          "meaning": "the percentage of cars for sale from the model year 2022"
-        }
-      ]
-    },
-    {
-      "step_number": 6,
-      "function_name": "find_min_with_labels",
+      "function_name": "get_value_at_label",
       "params_meaning": [
         {
           "param": "values",
-          "meaning": "a list of percentage values representing the proportion of cars for sale for each model year"
+          "meaning": "a list of numerical quantities corresponding to each category or group"
         },
         {
           "param": "labels",
-          "meaning": "a list of model years corresponding to each percentage value in the values list"
+          "meaning": "a list of identifiers or names for each category or group"
+        },
+        {
+          "param": "target_label",
+          "meaning": "the specific identifier or name of the category for which the value is requested"
         }
       ]
     }
