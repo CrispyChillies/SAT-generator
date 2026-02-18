@@ -48,9 +48,9 @@ class StepRequirementInput(BaseModel):
     requirement: str = Field(
         description="Non-computational requirement for the current step (e.g. write an equation that models a constraint, state which formula applies, or give short reasoning to choose an answer). If the question has multiple steps, pass exactly one step's requirement per call."
     )
-
-class MinListInput(BaseModel):
-    numbers: List[float] = Field(description="List of numbers to find the minimum value.")
+class MinWithLabelsInput(BaseModel):
+    values: List[float] = Field(description="List of values (e.g., percentages) to find minimum.")
+    labels: List[Union[int, float, str]] = Field(description="List of labels (e.g., years like [2015, 2016, 2017]) corresponding to each value. Must have same length as values.")
 
 class MinDictInput(BaseModel):
     data: Dict[str, float] = Field(description="Dictionary mapping keys to numbers.")
@@ -132,17 +132,32 @@ def integral_func(expr_str: str, var: str, lower: Optional[float] = None, upper:
         return str(result)
     except Exception as e:
         raise ValueError(f"Error computing integral: {str(e)}")
+
+def find_min_with_labels(values: List[float], labels: List[Union[int, float, str]]) -> dict:
+    """
+    ALWAYS USE THIS TOOL for finding minimum/maximum values in a list with labels.
+    This is the PRIMARY tool for graph/chart questions asking "which year/label has the smallest/largest value".
     
-def find_min_in_list(numbers: List[float]) -> dict:
+    Returns:
+        - min_value: The minimum value in the list
+        - min_label: The label (e.g., year) corresponding to the minimum value
+        - index: 0-based index of the minimum value
+    
+    Example:
+        Input: values=[15, 14, 3, 7], labels=[2010, 2011, 2012, 2013]
+        Output: {'min_value': 3.0, 'min_label': 2012, 'index': 2}
+        
+        The answer is min_label (2012), NOT the index.
     """
-    Find the minimum value in a list of numbers.
-    Returns a dict with 'min_value' and 'index'.
-    """
-    if not numbers:
-        raise ValueError("Input list is empty.")
-    min_value = min(numbers)
-    index = numbers.index(min_value)
-    return {"min_value": min_value, "index": index}
+    if not values:
+        raise ValueError("Input values list is empty.")
+    if len(values) != len(labels):
+        raise ValueError(f"values and labels must have same length. Got {len(values)} values and {len(labels)} labels.")
+    
+    min_value = min(values)
+    index = values.index(min_value)
+    min_label = labels[index]
+    return {"min_value": min_value, "min_label": min_label, "index": index}
 
 def find_min_in_dict(data: Dict[str, float]) -> dict:
     """
@@ -251,10 +266,10 @@ math_tools = [
 
 math_tools.extend([
     StructuredTool.from_function(
-        func=find_min_in_list,
-        name="find_min_in_list",
-        description="Find the minimum value in a list of numbers. Returns the value and its index.",
-        args_schema=MinListInput
+        func=find_min_with_labels,
+        name="find_min_with_labels",
+        description="PREFERRED for graph problems with years/labels. Pass values (e.g., percentages) and labels (e.g., years [2015, 2016, 2017]). Returns the label (year) directly with min value. No index calculation needed.",
+        args_schema=MinWithLabelsInput
     ),
     StructuredTool.from_function(
         func=find_min_in_dict,

@@ -68,7 +68,7 @@ class GeneratedGraphQuestionContent(BaseModel):
     correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer")
     new_x_values: List[int] = Field(description="New x-axis values for the graph (e.g., years)")
     new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages)")
-    new_long_description: str = Field(description="New long description for the graph (sr-only text), matching the new x/y values")
+    new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
 
     @field_validator("choices")
     @classmethod
@@ -85,6 +85,15 @@ class GeneratedGraphQuestionContent(BaseModel):
 def _remove_svg_from_html(html: str) -> str:
     """Loại bỏ toàn bộ SVG element khỏi HTML."""
     return re.sub(r'<svg\b.*?</svg>', '', html, flags=re.DOTALL | re.IGNORECASE)
+
+
+def _remove_svg_and_long_desc_from_html(html: str) -> str:
+    """Loại bỏ toàn bộ SVG element và long description (sr-only div) khỏi HTML."""
+    # Remove SVG
+    result = re.sub(r'<svg\b.*?</svg>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove sr-only div containing long description
+    result = re.sub(r'<div[^>]*class="sr-only"[^>]*>.*?</div>', '', result, flags=re.DOTALL | re.IGNORECASE)
+    return result
 
 
 def _generate_line_graph_svg(
@@ -273,6 +282,9 @@ def _build_prompt_graph_multiple_choice(
         f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
     )
     
+    # Extract long_description_html for the prompt
+    long_desc_html = graph_spec.get("long_description_html", "")
+    
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
     
     return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question with a GRAPH/CHART.
@@ -280,16 +292,23 @@ def _build_prompt_graph_multiple_choice(
 Task: Generate new numerical values for the graph and update all related text accordingly.
 
 IMPORTANT:
-- The question contains a graph (SVG will be handled separately by code).
+- The question contains a graph (SVG and long description will be handled separately by code).
 - You must generate NEW x_values and y_values for the graph.
-- Update the question text, explanation, choices, and long_description to match the new graph data.
+- Update the question text, explanation, choices to match the new graph data.
 - Keep the same structure and wording, only change numbers.
 - The correct answer letter should remain {correct_letter} (the answer should correspond to the new data).
+- DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
+- CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
 
 Original GraphSpec:
 {graph_spec_json}
 
-Sample question TEXT (without SVG):
+Original Long Description HTML Structure (YOU MUST PRESERVE THIS EXACT HTML FORMAT for new_long_description):
+---
+{long_desc_html}
+---
+
+Sample question TEXT (without SVG and without long description):
 ---
 {question_text_no_svg}
 ---
@@ -307,13 +326,13 @@ Sample 4 choices (correct answer is {correct_letter}):
 Category: {category}. Section: {section}. Difficulty: {difficulty}.
 
 Return a JSON object with:
-- question_text: new question text (without SVG, only numbers changed)
+- question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
 - explanation: new explanation (numbers changed to match new graph)
 - choices: list of 4 strings (A, B, C, D order, numbers changed)
 - correct_answer_letter: "{correct_letter}" (or different if the answer changes based on new data)
 - new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
-- new_long_description: new graph description for screen readers (matching new x/y values)
+- new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
 """
 
 
@@ -510,8 +529,9 @@ def generate_new_question(
         # Kiểm tra nếu câu hỏi có đồ thị → dùng luồng xử lý riêng (không truyền SVG vào prompt)
         if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
             # ========== LUỒNG XỬ LÝ CÂU HỎI CÓ ĐỒ THỊ ==========
-            # Loại bỏ SVG khỏi HTML để giảm token
-            question_text_no_svg = _remove_svg_from_html(original_html)
+            # Loại bỏ SVG và long description khỏi HTML để giảm token
+            # Long description sẽ được xử lý riêng và chèn vào figure block
+            question_text_no_svg = _remove_svg_and_long_desc_from_html(original_html)
             
             # Convert GraphSpec to dict for JSON serialization
             graph_spec_dict = {
@@ -522,6 +542,7 @@ def generate_new_question(
                 "y_values": graph_spec.y_values,
                 "y_unit": graph_spec.y_unit,
                 "raw_long_description": graph_spec.raw_long_description,
+                "long_description_html": graph_spec.long_description_html,
             }
             
             # Dùng prompt riêng cho câu hỏi có đồ thị
@@ -585,9 +606,13 @@ def generate_new_question(
                 # Giả sử new_question_text_no_svg có format: "<p>intro...</p>\n<p>question...</p>"
                 # Chèn figure vào giữa
                 
+                # Loại bỏ long description từ LLM output (nếu có) để tránh trùng lặp
+                # vì figure_block đã chứa long description
+                clean_question_text = _remove_svg_and_long_desc_from_html(new_question_text_no_svg)
+                
                 # Tách text thành 2 phần: intro (mô tả đồ thị) và question (câu hỏi)
                 # Tìm câu hỏi cuối cùng (thường bắt đầu bằng "For what..." hoặc kết thúc bằng "?")
-                parts = re.split(r'(<p[^>]*>.*?</p>)', new_question_text_no_svg, flags=re.DOTALL)
+                parts = re.split(r'(<p[^>]*>.*?</p>)', clean_question_text, flags=re.DOTALL)
                 parts = [p for p in parts if p.strip()]  # Loại bỏ empty strings
                 
                 if len(parts) >= 2:
@@ -598,7 +623,7 @@ def generate_new_question(
                     new_question_text = f'{intro_text}\n<p style="text-align: center;">{figure_block}</p>\n{question_part}'
                 else:
                     # Nếu chỉ có 1 phần, đặt figure ở đầu
-                    new_question_text = f'<p style="text-align: center;">{figure_block}</p>\n{new_question_text_no_svg}'
+                    new_question_text = f'<p style="text-align: center;">{figure_block}</p>\n{clean_question_text}'
             else:
                 # Fallback: chỉ dùng text không có SVG
                 new_question_text = new_question_text_no_svg

@@ -2,25 +2,61 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "find_min_in_list",
+      "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "numbers",
-          "meaning": "a list of percentage values representing the proportion of cars for sale for each model year"
+          "param": "requirement",
+          "meaning": "a request to describe the significance of the given equation within the problem's scenario"
         }
       ]
     },
     {
       "step_number": 2,
-      "function_name": "add",
+      "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "a",
-          "meaning": "the starting model year in the sequence"
-        },
+          "param": "requirement",
+          "meaning": "a request to determine which part of the equation corresponds to the unit price of the smaller item"
+        }
+      ]
+    },
+    {
+      "step_number": 3,
+      "function_name": "llm_generate_step",
+      "params_meaning": [
         {
-          "param": "b",
-          "meaning": "the position or index offset from the starting model year"
+          "param": "requirement",
+          "meaning": "a request to provide reasoning for why a specific coefficient in the equation corresponds to the unit price of one type of item"
+        }
+      ]
+    },
+    {
+      "step_number": 4,
+      "function_name": "llm_generate_step",
+      "params_meaning": [
+        {
+          "param": "requirement",
+          "meaning": "a request to provide reasoning for why a specific term in the equation corresponds to the total revenue generated from one type of product"
+        }
+      ]
+    },
+    {
+      "step_number": 5,
+      "function_name": "llm_generate_step",
+      "params_meaning": [
+        {
+          "param": "requirement",
+          "meaning": "a request to determine which part of the given equation corresponds to the unit price of the smaller container"
+        }
+      ]
+    },
+    {
+      "step_number": 6,
+      "function_name": "llm_generate_step",
+      "params_meaning": [
+        {
+          "param": "requirement",
+          "meaning": "a request to evaluate and verify the correctness of a previously determined value against an expected result"
         }
       ]
     }

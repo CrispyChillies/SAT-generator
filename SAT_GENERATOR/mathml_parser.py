@@ -12,7 +12,8 @@ class GraphSpec:
     x_values: Optional[List[Any]] = None
     y_values: Optional[List[float]] = None
     y_unit: Optional[str] = None
-    raw_long_description: Optional[str] = None
+    raw_long_description: Optional[str] = None  # Plain text version
+    long_description_html: Optional[str] = None  # HTML structure preserved
 
 
 class MathMLParser:
@@ -42,8 +43,8 @@ class MathMLParser:
 
         # --- Step 1: Extract graph long description BEFORE XML parsing ---
         # (Because SVG may contain invalid XML or huge payload)
-        long_desc = self._extract_graph_long_description(s)
-        graph = self._long_desc_to_graphspec(long_desc) if long_desc else None
+        long_desc_result = self._extract_graph_long_description(s)
+        graph = self._long_desc_to_graphspec(long_desc_result) if long_desc_result else None
 
         # --- Step 2: Remove SVG entirely to save parsing cost ---
         s_wo_svg = self._remove_svg_blocks(s)
@@ -122,11 +123,14 @@ class MathMLParser:
     # ----------------------------
     # Graph extraction
     # ----------------------------
-    def _extract_graph_long_description(self, html: str) -> Optional[str]:
+    def _extract_graph_long_description(self, html: str) -> Optional[Dict[str, str]]:
         """
         Extract sr-only long description from SAT HTML.
         Example marker:
           aria-label="Long description for line graph"
+        
+        Returns:
+            Dict with 'html' (original HTML structure) and 'text' (plain text for parsing)
         """
         # robust regex: get content inside <div ... aria-label="Long description ..."> ... </div>
         m = re.search(
@@ -141,34 +145,43 @@ class MathMLParser:
         # inside is usually <ul><li>...</li></ul>
         inner_html = m.group(1)
         inner_html = self._remove_svg_blocks(inner_html)
+        
+        # Keep the HTML structure (just clean up whitespace between tags)
+        html_content = inner_html.strip()
 
-        # strip tags roughly
+        # Also create plain text version for parsing x/y values
         text = self._strip_tags_fallback(inner_html)
-
-        # normalize whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-        return text if text else None
+        
+        return {'html': html_content, 'text': text} if (html_content or text) else None
 
-    def _long_desc_to_graphspec(self, long_desc: str) -> Optional[GraphSpec]:
+    def _long_desc_to_graphspec(self, long_desc_result: Dict[str, str]) -> Optional[GraphSpec]:
         """
         Convert SAT long description to GraphSpec (currently supports line graph).
+        
+        Args:
+            long_desc_result: Dict with 'html' and 'text' keys
         """
-        if not long_desc:
+        if not long_desc_result:
             return None
+        
+        long_desc_text = long_desc_result.get('text', '')
+        long_desc_html = long_desc_result.get('html', '')
 
         # detect graph type
         graph_type = "unknown"
-        if "line graph" in long_desc.lower():
+        if "line graph" in long_desc_text.lower():
             graph_type = "line"
 
         # Extract pairs like: "Begins at 2010, 12%"
         # Works also for: "Falls sharply to 2014, 4%"
-        pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc)
+        pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
 
         if not pairs:
             return GraphSpec(
                 graph_type=graph_type,
-                raw_long_description=long_desc
+                raw_long_description=long_desc_text,
+                long_description_html=long_desc_html
             )
 
         x_vals = [int(x) for x, _ in pairs]
@@ -176,8 +189,8 @@ class MathMLParser:
 
         # heuristic axis labels (SAT dataset style)
         x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else None
-        y_label = "Percent" if "%" in long_desc else None
-        y_unit = "%" if "%" in long_desc else None
+        y_label = "Percent" if "%" in long_desc_text else None
+        y_unit = "%" if "%" in long_desc_text else None
 
         return GraphSpec(
             graph_type=graph_type,
@@ -186,7 +199,8 @@ class MathMLParser:
             x_values=x_vals,
             y_values=y_vals,
             y_unit=y_unit,
-            raw_long_description=long_desc
+            raw_long_description=long_desc_text,
+            long_description_html=long_desc_html
         )
 
     # ----------------------------
