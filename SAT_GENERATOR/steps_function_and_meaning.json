@@ -5,8 +5,24 @@
       "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to describe the significance of the given equation within the problem's scenario"
+          "param": "2018",
+          "meaning": "the percentage of cars for sale from the model year 2018"
+        },
+        {
+          "param": "2019",
+          "meaning": "the percentage of cars for sale from the model year 2019"
+        },
+        {
+          "param": "2020",
+          "meaning": "the percentage of cars for sale from the model year 2020"
+        },
+        {
+          "param": "2021",
+          "meaning": "the percentage of cars for sale from the model year 2021"
+        },
+        {
+          "param": "2022",
+          "meaning": "the percentage of cars for sale from the model year 2022"
         }
       ]
     },
@@ -15,8 +31,24 @@
       "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to determine which part of the equation corresponds to the unit price of the smaller item"
+          "param": "2018",
+          "meaning": "the percentage of cars for sale from the model year 2018"
+        },
+        {
+          "param": "2019",
+          "meaning": "the percentage of cars for sale from the model year 2019"
+        },
+        {
+          "param": "2020",
+          "meaning": "the percentage of cars for sale from the model year 2020"
+        },
+        {
+          "param": "2021",
+          "meaning": "the percentage of cars for sale from the model year 2021"
+        },
+        {
+          "param": "2022",
+          "meaning": "the percentage of cars for sale from the model year 2022"
         }
       ]
     },
@@ -25,8 +57,24 @@
       "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to provide reasoning for why a specific coefficient in the equation corresponds to the unit price of one type of item"
+          "param": "2018",
+          "meaning": "the percentage of cars for sale from the model year 2018"
+        },
+        {
+          "param": "2019",
+          "meaning": "the percentage of cars for sale from the model year 2019"
+        },
+        {
+          "param": "2020",
+          "meaning": "the percentage of cars for sale from the model year 2020"
+        },
+        {
+          "param": "2021",
+          "meaning": "the percentage of cars for sale from the model year 2021"
+        },
+        {
+          "param": "2022",
+          "meaning": "the percentage of cars for sale from the model year 2022"
         }
       ]
     },
@@ -35,8 +83,24 @@
       "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to provide reasoning for why a specific term in the equation corresponds to the total revenue generated from one type of product"
+          "param": "2018",
+          "meaning": "the percentage of cars for sale from the model year 2018"
+        },
+        {
+          "param": "2019",
+          "meaning": "the percentage of cars for sale from the model year 2019"
+        },
+        {
+          "param": "2020",
+          "meaning": "the percentage of cars for sale from the model year 2020"
+        },
+        {
+          "param": "2021",
+          "meaning": "the percentage of cars for sale from the model year 2021"
+        },
+        {
+          "param": "2022",
+          "meaning": "the percentage of cars for sale from the model year 2022"
         }
       ]
     },
@@ -45,18 +109,38 @@
       "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to determine which part of the given equation corresponds to the unit price of the smaller container"
+          "param": "2018",
+          "meaning": "the percentage of cars for sale from the model year 2018"
+        },
+        {
+          "param": "2019",
+          "meaning": "the percentage of cars for sale from the model year 2019"
+        },
+        {
+          "param": "2020",
+          "meaning": "the percentage of cars for sale from the model year 2020"
+        },
+        {
+          "param": "2021",
+          "meaning": "the percentage of cars for sale from the model year 2021"
+        },
+        {
+          "param": "2022",
+          "meaning": "the percentage of cars for sale from the model year 2022"
         }
       ]
     },
     {
       "step_number": 6,
-      "function_name": "llm_generate_step",
+      "function_name": "find_min_with_labels",
       "params_meaning": [
         {
-          "param": "requirement",
-          "meaning": "a request to evaluate and verify the correctness of a previously determined value against an expected result"
+          "param": "values",
+          "meaning": "a list of percentage values representing the proportion of cars for sale for each model year"
+        },
+        {
+          "param": "labels",
+          "meaning": "a list of model years corresponding to each percentage value in the values list"
         }
       ]
     }

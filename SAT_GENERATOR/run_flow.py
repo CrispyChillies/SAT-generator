@@ -153,6 +153,11 @@ def run_flow(
     question_text = parsed['text']
     graph = parsed['graph']
 
+    full_question_text = question_text
+    if graph and hasattr(graph, 'long_description_html') and graph.long_description_html:   
+        # Chèn long description vào question text
+        full_question_text = f"{question_text}\n\nGraph data:\n{graph.long_description_html}"
+
     result_bag = {
         "steps_json_path": str(steps_path),
         "new_question_item": None,
@@ -169,7 +174,7 @@ def run_flow(
     try:
         agent = LangGraphMathAgent(api_key=api_key, model=model, verbose=verbose)
         trace = agent.solve(
-            question=question_text,
+            question=full_question_text,
             mathml_explanation=explanation,
             correct_answer=correct_answer,
             steps_json_path=str(steps_path),

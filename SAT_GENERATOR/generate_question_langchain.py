@@ -296,7 +296,9 @@ IMPORTANT:
 - You must generate NEW x_values and y_values for the graph.
 - Update the question text, explanation, choices to match the new graph data.
 - Keep the same structure and wording, only change numbers.
-- The correct answer letter should remain {correct_letter} (the answer should correspond to the new data).
+- CRITICAL: You MUST calculate the correct answer based on the NEW data. The correct answer letter may be different from the sample ({correct_letter}) if the new data leads to a different answer.
+- For example, if the question asks "which year has the smallest value", you must find the year with the minimum y_value in your new data and set that as the correct answer.
+- The 4 choices should be the same type as the original (e.g., if original choices are years, new choices should also be years from new_x_values).
 - DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
 - CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
 
@@ -318,7 +320,7 @@ Sample explanation:
 {original_explanation}
 ---
 
-Sample 4 choices (correct answer is {correct_letter}):
+Sample 4 choices (correct answer in the sample is {correct_letter}, but you may need to change it based on new data):
 ---
 {choices_text}
 ---
@@ -327,9 +329,9 @@ Category: {category}. Section: {section}. Difficulty: {difficulty}.
 
 Return a JSON object with:
 - question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
-- explanation: new explanation (numbers changed to match new graph)
-- choices: list of 4 strings (A, B, C, D order, numbers changed)
-- correct_answer_letter: "{correct_letter}" (or different if the answer changes based on new data)
+- explanation: new explanation (numbers changed to match new graph and correct answer)
+- choices: list of 4 strings (A, B, C, D order, numbers changed). If the question asks about years/labels, choices should be 4 different x_values from new_x_values.
+- correct_answer_letter: The letter (A, B, C, or D) of the correct answer BASED ON THE NEW DATA. For example, if the question asks "which year has the smallest value", find the year with min(new_y_values) and return its corresponding letter.
 - new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
@@ -438,22 +440,12 @@ def _build_prompt_multiple_choice(
     category: str,
     section: str,
     difficulty: str,
-    graph_spec: Optional[Any] = None,
 ) -> str:
     """Prompt cho multiple-choice: sinh question, explanation, 4 choices, và correct_answer_letter."""
     choices_text = "\n".join(
         f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
     )
-    graph_text = ""
-    if graph_spec:
-        graph_text = (
-        "\n\nBelow is the graph specification extracted from the sample question. "
-        "You must generate a new, reasonable set of numbers for the graph (x_values, y_values) of the same type, "
-        "and rewrite all graph-related descriptions, question, explanation, and choices to match the new numbers. "
-        "Do NOT change the structure or wording except for the numbers.\n"
-        f"GraphSpec (JSON):\n{json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)}\n"
-        )
-    return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter. {graph_text}
+    return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter.
 
 STRICT rules:
 - Do NOT rewrite or paraphrase. Keep every word and tag except numbers.
@@ -482,6 +474,7 @@ Return a JSON object with keys: question, explanation, choices, correct_answer_l
 - explanation: new explanation string (only numbers changed, consistent with new question).
 - choices: list of exactly 4 strings, in order A, B, C, D (only numbers changed in each).
 - correct_answer_letter: one of "A", "B", "C", "D" (the correct choice for the new question; typically the same as the sample, {correct_letter})."""
+
 
 
 def generate_new_question(
@@ -636,7 +629,6 @@ def generate_new_question(
                 "explanation": new_explanation,
             }
         else:
-            # ========== LUỒNG XỬ LÝ CÂU HỎI KHÔNG CÓ ĐỒ THỊ ==========
             prompt_text = _build_prompt_multiple_choice(
                 original_html,
                 original_explanation,

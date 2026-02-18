@@ -133,21 +133,18 @@ def integral_func(expr_str: str, var: str, lower: Optional[float] = None, upper:
     except Exception as e:
         raise ValueError(f"Error computing integral: {str(e)}")
 
-def find_min_with_labels(values: List[float], labels: List[Union[int, float, str]]) -> dict:
+def find_min_with_labels(values: List[float], labels: List[Union[int, float, str]]) -> Union[int, float, str]:
     """
     ALWAYS USE THIS TOOL for finding minimum/maximum values in a list with labels.
     This is the PRIMARY tool for graph/chart questions asking "which year/label has the smallest/largest value".
     
-    Returns:
-        - min_value: The minimum value in the list
-        - min_label: The label (e.g., year) corresponding to the minimum value
-        - index: 0-based index of the minimum value
+    Returns the label (e.g., year) corresponding to the minimum value directly.
     
     Example:
         Input: values=[15, 14, 3, 7], labels=[2010, 2011, 2012, 2013]
-        Output: {'min_value': 3.0, 'min_label': 2012, 'index': 2}
+        Output: 2012
         
-        The answer is min_label (2012), NOT the index.
+        The answer is the label (2012), NOT the index or min_value.
     """
     if not values:
         raise ValueError("Input values list is empty.")
@@ -156,8 +153,7 @@ def find_min_with_labels(values: List[float], labels: List[Union[int, float, str
     
     min_value = min(values)
     index = values.index(min_value)
-    min_label = labels[index]
-    return {"min_value": min_value, "min_label": min_label, "index": index}
+    return labels[index]
 
 def find_min_in_dict(data: Dict[str, float]) -> dict:
     """
