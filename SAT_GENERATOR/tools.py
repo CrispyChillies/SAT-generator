@@ -15,7 +15,7 @@ def _get_step_llm():
     if _llm_step is None:
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY must be set to use llm_generate_step tool")
-        _llm_step = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+        _llm_step = ChatOpenAI(model="gpt-4.1", temperature=0)
     return _llm_step
 
 # Pydantic models for tool inputs
@@ -66,6 +66,10 @@ class SumValuesInput(BaseModel):
 
 class AverageValuesInput(BaseModel):
     values: List[float] = Field(description="List of values to calculate average")
+
+class MaxIncreasePeriodInput(BaseModel):
+    values: List[float] = Field(description="List of values in order (e.g., temperatures)")
+    labels: List[Union[int, float, str]] = Field(description="List of labels (e.g., days [1, 2, 3])")
 
 # Tool functions
 def add_numbers(a: float, b: float) -> float:
@@ -250,6 +254,31 @@ def average_values(values: List[float]) -> float:
         raise ValueError("Input values list is empty.")
     return float(sum(values) / len(values))
 
+
+def find_max_increase_period(values: List[float], labels: List[Union[int, float, str]]) -> str:
+    """
+    Find the time period with the greatest increase (positive change).
+    Returns the period label where the maximum increase occurred.
+    
+    Example:
+        Input: values=[69, 60, 73, 67], labels=[1, 2, 3, 4]
+        Output: "2 to 3" (increase of 13)
+    """
+    if len(values) != len(labels):
+        raise ValueError(f"values and labels must have same length")
+    if len(values) < 2:
+        raise ValueError("Need at least 2 data points")
+    
+    max_increase = float('-inf')
+    max_period = None
+    
+    for i in range(len(values) - 1):
+        increase = values[i+1] - values[i]
+        if increase > max_increase:
+            max_increase = increase
+            max_period = f"{labels[i]} to {labels[i+1]}"
+    
+    return max_period
 # ---------------------------------------------------------------------------
 # LLM-based step output for non-computational requirements (equations, reasoning, etc.)
 # ---------------------------------------------------------------------------
@@ -375,5 +404,11 @@ math_tools.extend([
         name="average_values",
         description="Calculate the average (mean) of all values in a list. Use for questions asking for the average/mean (e.g., 'What is the average per group?'). Returns the average.",
         args_schema=AverageValuesInput
+    ),
+    StructuredTool.from_function(
+        func=find_max_increase_period,
+        name="find_max_increase_period",
+        description="Find the time period with the greatest increase (positive change). Use for questions asking which period had the largest increase (e.g., 'Which year had the greatest increase?'). Returns the period label where the maximum increase occurred.",
+        args_schema=MaxIncreasePeriodInput
     ),
 ])

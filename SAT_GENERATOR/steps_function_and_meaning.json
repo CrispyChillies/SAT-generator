@@ -2,19 +2,15 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "get_value_at_label",
+      "function_name": "find_max_increase_period",
       "params_meaning": [
         {
           "param": "values",
-          "meaning": "a list of numerical quantities corresponding to each category or group"
+          "meaning": "the recorded measurements of temperature at each time point"
         },
         {
           "param": "labels",
-          "meaning": "a list of identifiers or names for each category or group"
-        },
-        {
-          "param": "target_label",
-          "meaning": "the specific identifier or name of the category for which the value is requested"
+          "meaning": "the time points at which each temperature measurement was recorded"
         }
       ]
     }

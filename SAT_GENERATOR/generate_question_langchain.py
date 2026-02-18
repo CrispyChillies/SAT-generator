@@ -12,7 +12,7 @@ import re
 import uuid
 import io
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server
@@ -66,8 +66,8 @@ class GeneratedGraphQuestionContent(BaseModel):
     explanation: str = Field(description="New explanation, same format with only numbers changed")
     choices: List[str] = Field(description="Exactly 4 answer choices in order A, B, C, D; each with only numbers changed")
     correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer")
-    new_x_values: List[int] = Field(description="New x-axis values for the graph (e.g., years)")
-    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages)")
+    new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
+    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
     new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
 
     @field_validator("choices")
@@ -76,6 +76,16 @@ class GeneratedGraphQuestionContent(BaseModel):
         if v is None or len(v) != 4:
             raise ValueError("choices phải có đúng 4 phần tử (A, B, C, D)")
         return [str(x).strip() for x in v]
+    
+    @field_validator("new_y_values")
+    @classmethod
+    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
+        """Ensure new_x_values and new_y_values have the same length."""
+        if hasattr(info, 'data') and 'new_x_values' in info.data:
+            x_values = info.data['new_x_values']
+            if len(x_values) != len(v):
+                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
+        return v
 
 
 class GeneratedGraphFreeResponseContent(BaseModel):
@@ -83,9 +93,19 @@ class GeneratedGraphFreeResponseContent(BaseModel):
     question_text: str = Field(description="New question text (without SVG), same format with only numbers changed")
     explanation: str = Field(description="New explanation, same format with only numbers changed")
     correct_answer: str = Field(description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right value)")
-    new_x_values: List[int] = Field(description="New x-axis values for the graph (e.g., years)")
-    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages)")
+    new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
+    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
     new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
+    
+    @field_validator("new_y_values")
+    @classmethod
+    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
+        """Ensure new_x_values and new_y_values have the same length."""
+        if hasattr(info, 'data') and 'new_x_values' in info.data:
+            x_values = info.data['new_x_values']
+            if len(x_values) != len(v):
+                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +127,7 @@ def _remove_svg_and_long_desc_from_html(html: str) -> str:
 
 
 def _generate_line_graph_svg(
-    x_values: List[int],
+    x_values: List[Union[int, float]],
     y_values: List[float],
     x_label: str = "Model year",
     y_label: str = "Percent of cars for sale",
@@ -176,7 +196,7 @@ def _generate_line_graph_svg(
 
 
 def _generate_bar_graph_svg(
-    x_values: List[int],
+    x_values: List[Union[int, float]],
     y_values: List[float],
     x_label: str = "Group",
     y_label: str = "Number of books collected",
@@ -251,8 +271,93 @@ def _generate_bar_graph_svg(
     return svg_string
 
 
+def _generate_scatter_plot_svg(
+    x_values: List[float],
+    y_values: List[float],
+    x_label: str = "Time (days since June 1)",
+    y_label: str = "Temperature (°F)",
+    y_unit: str = "°F",
+    width: float = 8,
+    height: float = 5,
+) -> str:
+    """
+    Tạo scatter plot SVG bằng matplotlib.
+    
+    Args:
+        x_values: Danh sách giá trị trục x (vd: days [1, 2, 3, 4, 5, 6, 7])
+        y_values: Danh sách giá trị trục y (vd: temperatures [69, 60, 73, ...])
+        x_label: Nhãn trục x
+        y_label: Nhãn trục y
+        y_unit: Đơn vị y (vd: "°F")
+        width: Chiều rộng đồ thị (inches)
+        height: Chiều cao đồ thị (inches)
+    
+    Returns:
+        SVG string của đồ thị
+    """
+    # Tạo figure với kích thước phù hợp
+    fig, ax = plt.subplots(figsize=(width, height))
+    
+    # Vẽ scatter plot
+    ax.scatter(x_values, y_values, s=60, color='black', marker='o', zorder=3)
+    
+    # Thiết lập labels
+    ax.set_xlabel(x_label, fontsize=11)
+    ax.set_ylabel(y_label, fontsize=11)
+    
+    # Thiết lập trục x - hiển thị tất cả giá trị
+    if all(isinstance(x, (int, float)) for x in x_values):
+        x_min, x_max = min(x_values), max(x_values)
+        ax.set_xlim(x_min - 0.5, x_max + 0.5)
+        ax.set_xticks(x_values)
+        ax.set_xticklabels([str(int(x)) if x == int(x) else str(x) for x in x_values])
+    
+    # Thiết lập trục y
+    y_min, y_max = min(y_values), max(y_values)
+    y_range = y_max - y_min
+    # Add 10% padding
+    y_axis_min = max(0, y_min - y_range * 0.1)
+    y_axis_max = y_max + y_range * 0.1
+    
+    # Round to nice numbers
+    if y_axis_max <= 100:
+        tick_interval = 10
+    else:
+        tick_interval = 20
+    
+    y_axis_min = int(y_axis_min // tick_interval) * tick_interval
+    y_axis_max = int((y_axis_max // tick_interval) + 1) * tick_interval
+    
+    ax.set_ylim(y_axis_min, y_axis_max)
+    ax.set_yticks(range(y_axis_min, y_axis_max + 1, tick_interval))
+    if y_unit:
+        ax.set_yticklabels([f"{y}{y_unit}" for y in range(y_axis_min, y_axis_max + 1, tick_interval)])
+    
+    # Thêm grid
+    ax.grid(True, linestyle='-', alpha=0.7, zorder=0)
+    ax.set_axisbelow(True)
+    
+    # Tight layout để tránh cắt labels
+    plt.tight_layout()
+    
+    # Export to SVG string
+    svg_buffer = io.BytesIO()
+    fig.savefig(svg_buffer, format='svg', bbox_inches='tight')
+    plt.close(fig)  # Đóng figure để giải phóng memory
+    
+    svg_buffer.seek(0)
+    svg_string = svg_buffer.getvalue().decode('utf-8')
+    
+    # Loại bỏ XML declaration và DOCTYPE nếu có
+    svg_string = re.sub(r'<\?xml[^>]*\?>', '', svg_string)
+    svg_string = re.sub(r'<!DOCTYPE[^>]*>', '', svg_string)
+    svg_string = svg_string.strip()
+    
+    return svg_string
+
+
 def _generate_aria_label(
-    x_values: List[int],
+    x_values: List[Union[int, float]],
     y_values: List[float],
     x_label: str = "Model year",
     y_label: str = "Percent of cars for sale",
@@ -263,36 +368,66 @@ def _generate_aria_label(
     Tạo aria-label cho đồ thị (accessibility).
     """
     x_min, x_max = min(x_values), max(x_values)
-    y_max = max(y_values)
+    y_min, y_max = min(y_values), max(y_values)
     
     # Determine tick interval based on graph type and y_max
     if graph_type == "bar":
+        y_axis_min = 0
         if y_max <= 20:
             y_axis_max = int((y_max // 5 + 1) * 5)
             tick_interval = 5
         else:
             y_axis_max = int((y_max // 10 + 1) * 10)
             tick_interval = 10
+    elif graph_type == "scatter":
+        # Scatter plots use different y-axis range
+        y_range = y_max - y_min
+        y_axis_min = max(0, y_min - y_range * 0.1)
+        y_axis_max = y_max + y_range * 0.1
+        
+        if y_axis_max <= 100:
+            tick_interval = 10
+        else:
+            tick_interval = 20
+        
+        y_axis_min = int(y_axis_min // tick_interval) * tick_interval
+        y_axis_max = int((y_axis_max // tick_interval) + 1) * tick_interval
     else:  # line graph
+        y_axis_min = 0
         y_axis_max = int((y_max // 5 + 1) * 5)
         tick_interval = 5
     
-    graph_type_text = "bar graph" if graph_type == "bar" else "line graph"
+    if graph_type == "scatter":
+        graph_type_text = "scatter plot"
+    elif graph_type == "bar":
+        graph_type_text = "bar graph"
+    else:
+        graph_type_text = "line graph"
     
-    return (
-        f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
-        f"It ranges from {x_min} to {x_max} in increments of 1. "
-        f"The vertical axis is labeled {y_label}. "
-        f"It ranges from 0{y_unit} to {y_axis_max}{y_unit} in increments of 1, "
-        f"with values marked every {tick_interval} grid lines. Refer to long description."
-    )
+    # Format for scatter plot is slightly different
+    if graph_type == "scatter":
+        return (
+            f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
+            f"It ranges from {x_min} to {x_max} in increments of 1. "
+            f"The vertical axis is labeled {y_label}. "
+            f"It ranges from {y_axis_min}{y_unit} to {y_axis_max}{y_unit} in increments of {tick_interval}. "
+            f"Refer to long description."
+        )
+    else:
+        return (
+            f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
+            f"It ranges from {x_min} to {x_max} in increments of 1. "
+            f"The vertical axis is labeled {y_label}. "
+            f"It ranges from 0{y_unit} to {y_axis_max}{y_unit} in increments of 1, "
+            f"with values marked every {tick_interval} grid lines. Refer to long description."
+        )
 
 
 def _update_graph_in_html(
     original_html: str,
-    old_x_values: List[int],
+    old_x_values: List[Union[int, float]],
     old_y_values: List[float],
-    new_x_values: List[int],
+    new_x_values: List[Union[int, float]],
     new_y_values: List[float],
     new_long_description: str,
     x_label: str = "Model year",
@@ -323,6 +458,14 @@ def _update_graph_in_html(
     # 1. Tạo SVG mới bằng matplotlib (tùy loại đồ thị)
     if graph_type == "bar":
         new_svg = _generate_bar_graph_svg(
+            x_values=new_x_values,
+            y_values=new_y_values,
+            x_label=x_label,
+            y_label=y_label,
+            y_unit=y_unit,
+        )
+    elif graph_type == "scatter":
+        new_svg = _generate_scatter_plot_svg(
             x_values=new_x_values,
             y_values=new_y_values,
             x_label=x_label,
@@ -408,8 +551,16 @@ IMPORTANT:
 - You must generate NEW x_values and y_values for the graph.
 - Update the question text, explanation, choices to match the new graph data.
 - Keep the same structure and wording, only change numbers.
-- CRITICAL: You MUST calculate the correct answer based on the NEW data. The correct answer letter may be different from the sample ({correct_letter}) if the new data leads to a different answer.
-- For example, if the question asks "which year has the smallest value", you must find the year with the minimum y_value in your new data and set that as the correct answer.
+
+CRITICAL - CORRECT ANSWER CALCULATION (READ CAREFULLY):
+- DO NOT COPY the sample's correct_answer_letter ({correct_letter}). The sample letter is {correct_letter}, but your answer WILL BE DIFFERENT if the new data changes which choice is correct.
+- YOU MUST follow these steps IN ORDER:
+  1. Generate new_x_values and new_y_values
+  2. Read the question carefully to understand what it's asking (e.g., "which year has the smallest value", "which period has the greatest increase", etc.)
+  3. Using your NEW data (new_x_values and new_y_values), calculate which answer is correct
+  4. Set correct_answer_letter to the letter (A, B, C, or D) that corresponds to the correct answer based on your NEW data
+- EXAMPLE: If the question asks "In which year was the percentage the smallest?" and your new_y_values = [15, 8, 12, 10] with new_x_values = [2020, 2021, 2022, 2023], the correct answer is 2021 (smallest value is 8). If 2021 is choice B, then correct_answer_letter = "B", even if the sample was "{correct_letter}".
+
 - The 4 choices should be the same type as the original (e.g., if original choices are years, new choices should also be years from new_x_values).
 - DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
 - CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
@@ -443,8 +594,8 @@ Return a JSON object with:
 - question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
 - explanation: new explanation (numbers changed to match new graph and correct answer)
 - choices: list of 4 strings (A, B, C, D order, numbers changed). If the question asks about years/labels, choices should be 4 different x_values from new_x_values.
-- correct_answer_letter: The letter (A, B, C, or D) of the correct answer BASED ON THE NEW DATA. For example, if the question asks "which year has the smallest value", find the year with min(new_y_values) and return its corresponding letter.
-- new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
+- correct_answer_letter: The letter (A, B, C, or D) of the correct answer BASED ON YOUR NEW DATA. DO NOT just copy "{correct_letter}" from the sample. Calculate which choice is actually correct using your new_x_values and new_y_values, then return that letter.
+- new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...] or [1.0, 2.0, 3.0, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
 """
@@ -463,6 +614,7 @@ def _build_prompt_graph_free_response(
     
     # Extract long_description_html for the prompt
     long_desc_html = graph_spec.get("long_description_html", "")
+    graph_type = graph_spec.get("graph_type", "unknown")
     
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
     

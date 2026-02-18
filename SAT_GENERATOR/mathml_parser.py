@@ -44,7 +44,7 @@ class MathMLParser:
         # --- Step 1: Extract graph long description BEFORE XML parsing ---
         # (Because SVG may contain invalid XML or huge payload)
         long_desc_result = self._extract_graph_long_description(s)
-        graph = self._long_desc_to_graphspec(long_desc_result) if long_desc_result else None
+        graph = self._long_desc_to_graphspec(long_desc_result, full_html=s) if long_desc_result else None
 
         # --- Step 2: Remove SVG entirely to save parsing cost ---
         s_wo_svg = self._remove_svg_blocks(s)
@@ -160,12 +160,13 @@ class MathMLParser:
             'aria_label': aria_label
         } if (html_content or text) else None
 
-    def _long_desc_to_graphspec(self, long_desc_result: Dict[str, str]) -> Optional[GraphSpec]:
+    def _long_desc_to_graphspec(self, long_desc_result: Dict[str, str], full_html: str = "") -> Optional[GraphSpec]:
         """
         Convert SAT long description to GraphSpec (supports line graph, bar graph, scatter plot).
         
         Args:
             long_desc_result: Dict with 'html', 'text', and 'aria_label' keys
+            full_html: Full HTML content (for better label detection from question text)
         """
         if not long_desc_result:
             return None
@@ -180,7 +181,7 @@ class MathMLParser:
             graph_type = "line"
         elif "bar graph" in aria_label or "bar graph" in long_desc_text.lower():
             graph_type = "bar"
-        elif "scatter plot" in aria_label or "scatter plot" in long_desc_text.lower():
+        elif "scatter plot" in aria_label or "scatter plot" in long_desc_text.lower() or "scatterplot" in long_desc_text.lower():
             graph_type = "scatter"
 
         # Try multiple patterns to extract data
@@ -191,38 +192,74 @@ class MathMLParser:
         y_label = None
         y_unit = None
         
-        # Pattern 1: "Group X: value" format (new bar graph format)
-        # Example: "Group 1: 30", "Group 2: 62"
-        group_pairs = re.findall(r'Group\s+(\d+)\s*:\s*(\d+(?:\.\d+)?)', long_desc_text, re.IGNORECASE)
+        # Pattern 1: "(X comma Y)" format (scatter plot format)
+        # Example: "(1 comma 69)", "(2 comma 60)", "(3 comma 73)"
+        scatter_pairs = re.findall(r'\((\d+(?:\.\d+)?)\s+comma\s+(\d+(?:\.\d+)?)\)', long_desc_text, re.IGNORECASE)
         
-        if group_pairs:
-            x_vals = [f"Group {x}" for x, _ in group_pairs]
-            y_vals = [float(y) for _, y in group_pairs]
-            x_label = "Group"
+        if scatter_pairs:
+            x_vals = [float(x) for x, _ in scatter_pairs]
+            y_vals = [float(y) for _, y in scatter_pairs]
             
-            # Detect Y label and unit from context
-            lower_text = long_desc_text.lower()
-            if "books" in lower_text:
-                y_label = "Number of books"
-                y_unit = "books"
-            elif "number" in lower_text:
-                y_label = "Number"
-                y_unit = None
+            # Detect labels and units from full HTML context (better than just long description)
+            context = (full_html or long_desc_text).lower()
+            
+            # Detect x_label - look for patterns like "times x, in days"
+            if re.search(r'times?\s+x\s*,?\s*in\s+days?\s+since', context):
+                x_label = "Time (days since June 1)"
+            elif "time" in context and "days" in context:
+                x_label = "Time (days)"
+            elif "days since" in context:
+                x_label = "Days since June 1"
+            elif "days" in context:
+                x_label = "Days"
             else:
-                y_label = "Value"
+                x_label = "x"
+            
+            # Detect y_label and y_unit - look for patterns like "temperature y, in °F"
+            if re.search(r'temperature\s+y\s*,?\s*in\s+°f', context) or re.search(r'temperature\s+y\s*,?\s*in\s+degree', context):
+                y_label = "Temperature (°F)"
+                y_unit = "°F"
+            elif "temperature" in context:
+                if "°f" in context or "degree f" in context or "degrees f" in context:
+                    y_label = "Temperature (°F)"
+                    y_unit = "°F"
+                else:
+                    y_label = "Temperature"
+                    y_unit = None
+            else:
+                y_label = "y"
                 y_unit = None
         else:
-            # Pattern 2: "Year, percentage" format (line graph format)
-            # Example: "Begins at 2010, 12%", "Falls sharply to 2014, 4%"
-            year_pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
+            # Pattern 2: "Group X: Y" format (bar graph format)
+            group_pairs = re.findall(r'Group\s+(\d+)\s*:\s*(\d+(?:\.\d+)?)', long_desc_text, re.IGNORECASE)
             
-            if year_pairs:
-                x_vals = [int(x) for x, _ in year_pairs]
-                y_vals = [float(y) for _, y in year_pairs]
-                # heuristic axis labels (SAT dataset style)
-                x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else "Year"
-                y_label = "Percent" if "%" in long_desc_text else None
-                y_unit = "%" if "%" in long_desc_text else None
+            if group_pairs:
+                x_vals = [f"Group {x}" for x, _ in group_pairs]
+                y_vals = [float(y) for _, y in group_pairs]
+                x_label = "Group"
+                
+                # Detect Y label and unit from context
+                lower_text = long_desc_text.lower()
+                if "books" in lower_text:
+                    y_label = "Number of books"
+                    y_unit = "books"
+                elif "number" in lower_text:
+                    y_label = "Number"
+                    y_unit = None
+                else:
+                    y_label = "Value"
+                    y_unit = None
+            else:
+                # Pattern 3: "Year, percentage" format (line graph format)
+                year_pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
+                
+                if year_pairs:
+                    x_vals = [int(x) for x, _ in year_pairs]
+                    y_vals = [float(y) for _, y in year_pairs]
+                    # heuristic axis labels (SAT dataset style)
+                    x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else "Year"
+                    y_label = "Percent" if "%" in long_desc_text else None
+                    y_unit = "%" if "%" in long_desc_text else None
 
         # If no patterns matched, return basic GraphSpec with just the description
         if x_vals is None or y_vals is None:
