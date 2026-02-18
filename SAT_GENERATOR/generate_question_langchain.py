@@ -78,6 +78,16 @@ class GeneratedGraphQuestionContent(BaseModel):
         return [str(x).strip() for x in v]
 
 
+class GeneratedGraphFreeResponseContent(BaseModel):
+    """Output cho câu hỏi tự luận có đồ thị: LLM sinh text mới + số liệu đồ thị mới + correct_answer (không sinh SVG)."""
+    question_text: str = Field(description="New question text (without SVG), same format with only numbers changed")
+    explanation: str = Field(description="New explanation, same format with only numbers changed")
+    correct_answer: str = Field(description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right value)")
+    new_x_values: List[int] = Field(description="New x-axis values for the graph (e.g., years)")
+    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages)")
+    new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
+
+
 # ---------------------------------------------------------------------------
 # Utility functions cho xử lý đồ thị
 # ---------------------------------------------------------------------------
@@ -440,6 +450,71 @@ Return a JSON object with:
 """
 
 
+def _build_prompt_graph_free_response(
+    question_text_no_svg: str,
+    original_explanation: str,
+    original_correct_answer: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Prompt cho câu hỏi tự luận có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
+    
+    # Extract long_description_html for the prompt
+    long_desc_html = graph_spec.get("long_description_html", "")
+    
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    return f"""You are an SAT question writer. This is a FREE-RESPONSE question with a GRAPH/CHART.
+
+Task: Generate new numerical values for the graph and update all related text accordingly.
+
+IMPORTANT:
+- The question contains a graph (SVG and long description will be handled separately by code).
+- You must generate NEW x_values and y_values for the graph.
+- Update the question text, explanation, and correct answer to match the new graph data.
+- Keep the same structure and wording, only change numbers.
+- CRITICAL: You MUST calculate the correct answer based on the NEW data.
+- The correct answer should match the format of the sample (e.g., if it's a number, provide a number; if it's HTML/MathML, provide HTML/MathML).
+- DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
+- CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
+
+Original GraphSpec:
+{graph_spec_json}
+
+Original Long Description HTML Structure (YOU MUST PRESERVE THIS EXACT HTML FORMAT for new_long_description):
+---
+{long_desc_html}
+---
+
+Sample question TEXT (without SVG and without long description):
+---
+{question_text_no_svg}
+---
+
+Sample explanation:
+---
+{original_explanation}
+---
+
+Sample correct answer:
+---
+{original_correct_answer}
+---
+
+Category: {category}. Section: {section}. Difficulty: {difficulty}.
+
+Return a JSON object with:
+- question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
+- explanation: new explanation (numbers changed to match new graph and correct answer)
+- correct_answer: the correct answer for the new question, in the same format as the sample
+- new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
+- new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
+- new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
+"""
+
+
 def _get_question_html(sample: Dict[str, Any]) -> str:
     """Lấy nội dung câu hỏi mẫu (HTML + MathML) nguyên bản."""
     q = sample.get("question") or {}
@@ -742,7 +817,6 @@ def generate_new_question(
                 category,
                 section,
                 difficulty,
-                graph_spec=None  # Không truyền graph_spec vào prompt cũ
             )
             structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
             result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(
@@ -771,35 +845,137 @@ def generate_new_question(
 
     elif generate_full:
         # Không phải multiple-choice hoặc thiếu 4 choices: sinh question, explanation, correct_answer (nội dung)
-        prompt_text = _build_prompt(
-            original_html,
-            original_explanation,
-            original_correct_answer,
-            category,
-            section,
-            q_type,
-            difficulty,
-        )
-        structured_llm = llm.with_structured_output(GeneratedQuestionContent)
-        result: GeneratedQuestionContent = structured_llm.invoke(
-            [HumanMessage(content=prompt_text)]
-        )
-        new_question_text = (result.question or "").strip()
-        new_explanation = (result.explanation or "").strip()
-        new_correct_answer = (result.correct_answer or "").strip()
-        if not new_question_text:
-            raise ValueError("LLM không trả về nội dung câu hỏi.")
-        if not new_explanation:
-            raise ValueError("LLM không trả về explanation.")
-        if not new_correct_answer:
-            raise ValueError("LLM không trả về correct_answer.")
-        new_question_content = {
-            "paragraph": sample.get("question", {}).get("paragraph"),
-            "question": new_question_text,
-            "choices": None,
-            "correct_answer": new_correct_answer,
-            "explanation": new_explanation,
-        }
+        # Kiểm tra nếu câu hỏi có đồ thị → dùng luồng xử lý riêng (không truyền SVG vào prompt)
+        print(graph_spec)
+        if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
+            # ========== LUỒNG XỬ LÝ CÂU HỎI TỰ LUẬN CÓ ĐỒ THỊ ==========
+            # Loại bỏ SVG và long description khỏi HTML để giảm token
+            question_text_no_svg = _remove_svg_and_long_desc_from_html(original_html)
+
+            print("Free-response question text without SVG:", question_text_no_svg)
+            
+            # Convert GraphSpec to dict for JSON serialization
+            graph_spec_dict = {
+                "graph_type": graph_spec.graph_type,
+                "x_label": graph_spec.x_label,
+                "y_label": graph_spec.y_label,
+                "x_values": graph_spec.x_values,
+                "y_values": graph_spec.y_values,
+                "y_unit": graph_spec.y_unit,
+                "raw_long_description": graph_spec.raw_long_description,
+                "long_description_html": graph_spec.long_description_html,
+            }
+            
+            # Dùng prompt riêng cho câu hỏi tự luận có đồ thị
+            prompt_text = _build_prompt_graph_free_response(
+                question_text_no_svg,
+                original_explanation,
+                original_correct_answer,
+                graph_spec_dict,
+                category,
+                section,
+                difficulty,
+            )
+            
+            structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
+            result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(
+                [HumanMessage(content=prompt_text)]
+            )
+            
+            # Validate kết quả
+            new_question_text_no_svg = (result_free_response.question_text or "").strip()
+            new_explanation = (result_free_response.explanation or "").strip()
+            new_correct_answer = (result_free_response.correct_answer or "").strip()
+            
+            if not new_question_text_no_svg:
+                raise ValueError("LLM không trả về nội dung câu hỏi.")
+            if not new_explanation:
+                raise ValueError("LLM không trả về explanation.")
+            if not new_correct_answer:
+                raise ValueError("LLM không trả về correct_answer.")
+            
+            # Tạo SVG mới bằng matplotlib và cập nhật long description
+            updated_html_with_svg = _update_graph_in_html(
+                original_html,
+                old_x_values=graph_spec.x_values,
+                old_y_values=graph_spec.y_values,
+                new_x_values=result_free_response.new_x_values,
+                new_y_values=result_free_response.new_y_values,
+                new_long_description=result_free_response.new_long_description,
+                x_label=graph_spec.x_label or "Model year",
+                y_label=graph_spec.y_label or "Percent",
+                y_unit=graph_spec.y_unit or "%",
+                graph_type=graph_spec.graph_type or "line",
+            )
+            
+            # Trích xuất figure block (SVG + long_description) từ HTML đã cập nhật
+            figure_match = re.search(
+                r"<figure[^>]*>.*?</figure>",
+                updated_html_with_svg,
+                flags=re.DOTALL | re.IGNORECASE
+            )
+            
+            if figure_match:
+                figure_block = figure_match.group(0)
+                
+                # Loại bỏ long description từ LLM output (nếu có) để tránh trùng lặp
+                clean_question_text = _remove_svg_and_long_desc_from_html(new_question_text_no_svg)
+                
+                # Tách text thành 2 phần: intro (mô tả đồ thị) và question (câu hỏi)
+                parts = re.split(r'(<p[^>]*>.*?</p>)', clean_question_text, flags=re.DOTALL)
+                parts = [p for p in parts if p.strip()]  # Loại bỏ empty strings
+                
+                if len(parts) >= 2:
+                    # Giả sử phần cuối là câu hỏi
+                    intro_parts = parts[:-1]
+                    question_part = parts[-1]
+                    intro_text = ''.join(intro_parts)
+                    new_question_text = f'{intro_text}\n<p style="text-align: center;">{figure_block}</p>\n{question_part}'
+                else:
+                    # Nếu chỉ có 1 phần, đặt figure ở đầu
+                    new_question_text = f'<p style="text-align: center;">{figure_block}</p>\n{clean_question_text}'
+            else:
+                # Fallback: chỉ dùng text không có SVG
+                new_question_text = new_question_text_no_svg
+            
+            new_question_content = {
+                "paragraph": sample.get("question", {}).get("paragraph"),
+                "question": new_question_text,
+                "choices": None,
+                "correct_answer": new_correct_answer,
+                "explanation": new_explanation,
+            }
+        else:
+            # ========== LUỒNG XỬ LÝ CÂU HỎI TỰ LUẬN KHÔNG CÓ ĐỒ THỊ ==========
+            prompt_text = _build_prompt(
+                original_html,
+                original_explanation,
+                original_correct_answer,
+                category,
+                section,
+                q_type,
+                difficulty,
+            )
+            structured_llm = llm.with_structured_output(GeneratedQuestionContent)
+            result: GeneratedQuestionContent = structured_llm.invoke(
+                [HumanMessage(content=prompt_text)]
+            )
+            new_question_text = (result.question or "").strip()
+            new_explanation = (result.explanation or "").strip()
+            new_correct_answer = (result.correct_answer or "").strip()
+            if not new_question_text:
+                raise ValueError("LLM không trả về nội dung câu hỏi.")
+            if not new_explanation:
+                raise ValueError("LLM không trả về explanation.")
+            if not new_correct_answer:
+                raise ValueError("LLM không trả về correct_answer.")
+            new_question_content = {
+                "paragraph": sample.get("question", {}).get("paragraph"),
+                "question": new_question_text,
+                "choices": None,
+                "correct_answer": new_correct_answer,
+                "explanation": new_explanation,
+            }
     else:
         # Chỉ có question mẫu, không có explanation/correct_answer → chỉ sinh câu hỏi (tương thích cũ)
         class QuestionOnly(BaseModel):
@@ -905,5 +1081,5 @@ if __name__ == "__main__":
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.0)
     new_q = generate_new_question(graph_data, llm=llm)  # Truyền full object
     
-    # with open("new_question.json", "w", encoding="utf-8") as f:
-    #     json.dump(new_q, f, ensure_ascii=False, indent=2)
+    with open("new_question.json", "w", encoding="utf-8") as f:
+        json.dump(new_q, f, ensure_ascii=False, indent=2)

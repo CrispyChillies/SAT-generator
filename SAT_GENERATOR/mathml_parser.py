@@ -130,11 +130,12 @@ class MathMLParser:
           aria-label="Long description for line graph"
         
         Returns:
-            Dict with 'html' (original HTML structure) and 'text' (plain text for parsing)
+            Dict with 'html' (original HTML structure), 'text' (plain text for parsing),
+            and 'aria_label' (the aria-label text for graph type detection)
         """
         # robust regex: get content inside <div ... aria-label="Long description ..."> ... </div>
         m = re.search(
-            r'aria-label="Long description[^"]*"\s+class="sr-only"\s*>'
+            r'aria-label="(Long description[^"]*)"\s+class="sr-only"\s*>'
             r'(.*?)</div>',
             html,
             flags=re.DOTALL | re.IGNORECASE
@@ -142,8 +143,8 @@ class MathMLParser:
         if not m:
             return None
 
-        # inside is usually <ul><li>...</li></ul>
-        inner_html = m.group(1)
+        aria_label = m.group(1)
+        inner_html = m.group(2)
         inner_html = self._remove_svg_blocks(inner_html)
         
         # Keep the HTML structure (just clean up whitespace between tags)
@@ -153,44 +154,83 @@ class MathMLParser:
         text = self._strip_tags_fallback(inner_html)
         text = re.sub(r'\s+', ' ', text).strip()
         
-        return {'html': html_content, 'text': text} if (html_content or text) else None
+        return {
+            'html': html_content,
+            'text': text,
+            'aria_label': aria_label
+        } if (html_content or text) else None
 
     def _long_desc_to_graphspec(self, long_desc_result: Dict[str, str]) -> Optional[GraphSpec]:
         """
-        Convert SAT long description to GraphSpec (currently supports line graph).
+        Convert SAT long description to GraphSpec (supports line graph, bar graph, scatter plot).
         
         Args:
-            long_desc_result: Dict with 'html' and 'text' keys
+            long_desc_result: Dict with 'html', 'text', and 'aria_label' keys
         """
         if not long_desc_result:
             return None
         
         long_desc_text = long_desc_result.get('text', '')
         long_desc_html = long_desc_result.get('html', '')
+        aria_label = long_desc_result.get('aria_label', '').lower()
 
-        # detect graph type
+        # detect graph type from aria-label first, fallback to content
         graph_type = "unknown"
-        if "line graph" in long_desc_text.lower():
+        if "line graph" in aria_label or "line graph" in long_desc_text.lower():
             graph_type = "line"
+        elif "bar graph" in aria_label or "bar graph" in long_desc_text.lower():
+            graph_type = "bar"
+        elif "scatter plot" in aria_label or "scatter plot" in long_desc_text.lower():
+            graph_type = "scatter"
 
-        # Extract pairs like: "Begins at 2010, 12%"
-        # Works also for: "Falls sharply to 2014, 4%"
-        pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
+        # Try multiple patterns to extract data
+        pairs = None
+        x_vals = None
+        y_vals = None
+        x_label = None
+        y_label = None
+        y_unit = None
+        
+        # Pattern 1: "Group X: value" format (new bar graph format)
+        # Example: "Group 1: 30", "Group 2: 62"
+        group_pairs = re.findall(r'Group\s+(\d+)\s*:\s*(\d+(?:\.\d+)?)', long_desc_text, re.IGNORECASE)
+        
+        if group_pairs:
+            x_vals = [f"Group {x}" for x, _ in group_pairs]
+            y_vals = [float(y) for _, y in group_pairs]
+            x_label = "Group"
+            
+            # Detect Y label and unit from context
+            lower_text = long_desc_text.lower()
+            if "books" in lower_text:
+                y_label = "Number of books"
+                y_unit = "books"
+            elif "number" in lower_text:
+                y_label = "Number"
+                y_unit = None
+            else:
+                y_label = "Value"
+                y_unit = None
+        else:
+            # Pattern 2: "Year, percentage" format (line graph format)
+            # Example: "Begins at 2010, 12%", "Falls sharply to 2014, 4%"
+            year_pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
+            
+            if year_pairs:
+                x_vals = [int(x) for x, _ in year_pairs]
+                y_vals = [float(y) for _, y in year_pairs]
+                # heuristic axis labels (SAT dataset style)
+                x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else "Year"
+                y_label = "Percent" if "%" in long_desc_text else None
+                y_unit = "%" if "%" in long_desc_text else None
 
-        if not pairs:
+        # If no patterns matched, return basic GraphSpec with just the description
+        if x_vals is None or y_vals is None:
             return GraphSpec(
                 graph_type=graph_type,
                 raw_long_description=long_desc_text,
                 long_description_html=long_desc_html
             )
-
-        x_vals = [int(x) for x, _ in pairs]
-        y_vals = [float(y) for _, y in pairs]
-
-        # heuristic axis labels (SAT dataset style)
-        x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else None
-        y_label = "Percent" if "%" in long_desc_text else None
-        y_unit = "%" if "%" in long_desc_text else None
 
         return GraphSpec(
             graph_type=graph_type,
