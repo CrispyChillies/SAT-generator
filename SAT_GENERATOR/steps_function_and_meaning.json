@@ -2,15 +2,15 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "subtract",
+      "function_name": "find_min_with_labels",
       "params_meaning": [
         {
-          "param": "a",
-          "meaning": "the ending percentage value from the graph"
+          "param": "values",
+          "meaning": "the percent of cars for sale for each model year"
         },
         {
-          "param": "b",
-          "meaning": "the starting percentage value from the graph"
+          "param": "labels",
+          "meaning": "the model years corresponding to each percent value"
         }
       ]
     }

@@ -112,6 +112,54 @@ class GeneratedGraphFreeResponseContent(BaseModel):
         return v
 
 
+class GeneratedParagraphGraphMultipleChoiceContent(BaseModel):
+    """Output cho câu hỏi multiple-choice có đồ thị trong paragraph: LLM sinh text mới + số liệu đồ thị mới cho paragraph."""
+    question: str = Field(description="New question content (just the question text, no graph)")
+    explanation: str = Field(description="New explanation, same format with only numbers changed")
+    choices: List[str] = Field(description="Exactly 4 answer choices in order A, B, C, D")
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer")
+    paragraph_text: str = Field(description="New paragraph text without SVG and long description, only the intro/context text")
+    new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the paragraph graph")
+    new_y_values: List[float] = Field(description="New y-axis values for the paragraph graph")
+    new_long_description: str = Field(description="New long description for the paragraph graph in HTML format, preserving original structure")
+    
+    @field_validator("choices")
+    @classmethod
+    def choices_must_be_four(cls, v: List[str]) -> List[str]:
+        if v is None or len(v) != 4:
+            raise ValueError("choices phải có đúng 4 phần tử (A, B, C, D)")
+        return [str(x).strip() for x in v]
+    
+    @field_validator("new_y_values")
+    @classmethod
+    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
+        """Ensure new_x_values and new_y_values have the same length."""
+        if hasattr(info, 'data') and 'new_x_values' in info.data:
+            x_values = info.data['new_x_values']
+            if len(x_values) != len(v):
+                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Utility functions cho xử lý đồ thị
+# ---------------------------------------------------------------------------
+    def choices_must_be_four(cls, v: List[str]) -> List[str]:
+        if v is None or len(v) != 4:
+            raise ValueError("choices phải có đúng 4 phần tử (A, B, C, D)")
+        return [str(x).strip() for x in v]
+    
+    @field_validator("new_y_values")
+    @classmethod
+    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
+        """Ensure new_x_values and new_y_values have the same length."""
+        if hasattr(info, 'data') and 'new_x_values' in info.data:
+            x_values = info.data['new_x_values']
+            if len(x_values) != len(v):
+                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
+        return v
+
+
 # ---------------------------------------------------------------------------
 # Utility functions cho xử lý đồ thị
 # ---------------------------------------------------------------------------
@@ -526,6 +574,114 @@ def _update_graph_in_html(
     return result
 
 
+def _verify_graph_correct_answer(
+    question_text: str,
+    choices: List[str],
+    x_values: List[Union[int, float]],
+    y_values: List[float],
+    llm_answer_letter: str,
+) -> str:
+    """
+    Verify and calculate the correct answer based on the question and graph data.
+    
+    Args:
+        question_text: The question text
+        choices: List of 4 choices (A, B, C, D)
+        x_values: X-axis values from the graph
+        y_values: Y-axis values from the graph
+        llm_answer_letter: The answer letter suggested by LLM
+    
+    Returns:
+        The correct answer letter (A, B, C, or D)
+    """
+    # Parse question to understand what it's asking
+    q_lower = question_text.lower()
+    
+    # Determine what we're looking for
+    looking_for_min = any(keyword in q_lower for keyword in ["smallest", "lowest", "minimum", "least"])
+    looking_for_max = any(keyword in q_lower for keyword in ["largest", "highest", "maximum", "greatest", "most"])
+    
+    if not looking_for_min and not looking_for_max:
+        # Can't determine - trust LLM
+        return llm_answer_letter
+    
+    # Find the correct x_value
+    if looking_for_min:
+        min_idx = y_values.index(min(y_values))
+        correct_x = x_values[min_idx]
+    else:  # looking_for_max
+        max_idx = y_values.index(max(y_values))
+        correct_x = x_values[max_idx]
+    
+    # Map to choice - choices should contain the x_value
+    # Extract numeric values from choices
+    correct_letter = llm_answer_letter  # default
+    
+    for i, choice in enumerate(choices):
+        choice_str = str(choice).strip()
+        # Try to extract year/number from choice
+        import re
+        numbers = re.findall(r'\d+', choice_str)
+        if numbers:
+            choice_value = int(numbers[0]) if numbers[0].isdigit() else float(numbers[0])
+            if choice_value == correct_x or abs(choice_value - correct_x) < 0.01:
+                correct_letter = ["A", "B", "C", "D"][i]
+                break
+    
+    return correct_letter
+
+
+def _update_explanation_for_corrected_answer(
+    original_explanation: str,
+    old_letter: str,
+    new_letter: str,
+    choices: List[str],
+) -> str:
+    """
+    Update explanation when the correct answer letter changes.
+    Replace references to the old letter with the new letter.
+    
+    Args:
+        original_explanation: The explanation from LLM
+        old_letter: The old (incorrect) answer letter
+        new_letter: The new (correct) answer letter
+        choices: List of 4 choices
+    
+    Returns:
+        Updated explanation
+    """
+    explanation = original_explanation
+    
+    # Replace "Choice X is correct" -> "Choice Y is correct"
+    explanation = re.sub(
+        rf'\bChoice {old_letter} is correct\b',
+        f'Choice {new_letter} is correct',
+        explanation,
+        flags=re.IGNORECASE
+    )
+    
+    # Replace "Choice X is the best answer" -> "Choice Y is the best answer"
+    explanation = re.sub(
+        rf'\bChoice {old_letter} is the best answer\b',
+        f'Choice {new_letter} is the best answer',
+        explanation,
+        flags=re.IGNORECASE
+    )
+    
+    # Replace other letters as incorrect
+    for letter in ["A", "B", "C", "D"]:
+        if letter == new_letter:
+            continue
+        explanation = re.sub(
+            rf'\bChoice {letter} is correct\b',
+            f'Choice {letter} is incorrect',
+            explanation,
+            flags=re.IGNORECASE
+        )
+    
+    return explanation
+
+
 def _build_prompt_graph_multiple_choice(
     question_text_no_svg: str,
     original_explanation: str,
@@ -710,6 +866,85 @@ def _get_explanation(sample: Dict[str, Any]) -> str:
     """Lấy explanation mẫu (HTML + MathML)."""
     q = sample.get("question") or {}
     return (q.get("explanation") or "").strip()
+
+
+def _build_prompt_paragraph_graph_multiple_choice(
+    original_question: str,
+    paragraph_text_no_svg: str,
+    original_explanation: str,
+    original_choices: List[str],
+    correct_letter: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Prompt cho câu hỏi multiple-choice có đồ thị trong paragraph."""
+    choices_text = "\n".join(
+        f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
+    )
+    
+    long_desc_html = graph_spec.get("long_description_html", "")
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question with a GRAPH in the PARAGRAPH section.
+
+Task: Generate new numerical values for the paragraph graph and update all related text accordingly.
+
+IMPORTANT:
+- The PARAGRAPH contains a graph (SVG and long description will be handled separately by code).
+- You must generate NEW x_values and y_values for the paragraph graph.
+- Update the paragraph text, question, explanation, and choices to match the new graph data.
+- Keep the same structure and wording, only change numbers.
+
+CRITICAL - CORRECT ANSWER CALCULATION (READ CAREFULLY):
+- DO NOT COPY the sample's correct_answer_letter ({correct_letter}). Calculate the correct answer based on your NEW data.
+- Follow these steps:
+  1. Generate new_x_values and new_y_values for the paragraph graph
+  2. Read the question carefully to understand what it asks
+  3. Using your NEW graph data, calculate which answer is correct
+  4. Set correct_answer_letter to the correct letter (A, B, C, or D)
+
+Original Paragraph GraphSpec:
+{graph_spec_json}
+
+Original Long Description HTML Structure (YOU MUST PRESERVE THIS EXACT HTML FORMAT):
+---
+{long_desc_html}
+---
+
+Sample PARAGRAPH text (without SVG and long description):
+---
+{paragraph_text_no_svg}
+---
+
+Sample QUESTION:
+---
+{original_question}
+---
+
+Sample explanation:
+---
+{original_explanation}
+---
+
+Sample 4 choices (correct answer in sample is {correct_letter}, but you may need to change it):
+---
+{choices_text}
+---
+
+Category: {category}. Section: {section}. Difficulty: {difficulty}.
+
+Return a JSON object with:
+- question: new question text (just the question, not the paragraph)
+- explanation: new explanation matching new data
+- choices: list of 4 strings (A, B, C, D order)
+- correct_answer_letter: The letter of the correct answer BASED ON YOUR NEW DATA
+- paragraph_text: new paragraph text without SVG and long description (only the context text)
+- new_x_values: list of new x-axis values for the paragraph graph
+- new_y_values: list of new y-axis values for the paragraph graph
+- new_long_description: new graph description in HTML format, preserving the exact <ul><li> structure
+"""
 
 
 def _get_correct_answer_content(sample: Dict[str, Any]) -> str:
@@ -908,12 +1143,152 @@ def generate_new_question(
     correct_letter = _get_correct_answer_letter(sample)
     original_correct_answer = _get_correct_answer_content(sample)
     original_paragraph = sample.get("question", {}).get("paragraph")
+    
+    # Parse paragraph to check for graph
+    paragraph_graph_spec = None
+    paragraph_text_no_svg = None
+    if original_paragraph:
+        paragraph_parsed = parser.parse_paragraph(original_paragraph)
+        if paragraph_parsed.get("has_graph"):
+            paragraph_graph_spec = paragraph_parsed.get("graph")
+            paragraph_text_no_svg = paragraph_parsed.get("text")
+    
     is_multiple_choice = (q_type == "multiple-choice") and len(original_choices) == 4 and correct_letter and original_explanation
     generate_full = bool(original_explanation and original_correct_answer)
 
     if is_multiple_choice:
+        # Kiểm tra nếu PARAGRAPH có đồ thị → dùng luồng xử lý riêng
+        if paragraph_graph_spec is not None and hasattr(paragraph_graph_spec, 'x_values') and paragraph_graph_spec.x_values:
+            # ========== LUỒNG XỬ LÝ CÂU HỎI CÓ ĐỒ THỊ TRONG PARAGRAPH ==========
+            print("Detected graph in paragraph. Using paragraph graph flow.")
+            
+            # Validate required data
+            if not paragraph_text_no_svg:
+                raise ValueError("Paragraph graph detected but paragraph text could not be extracted.")
+            if not correct_letter:
+                raise ValueError("Paragraph graph detected but correct_letter is missing.")
+            
+            # Convert GraphSpec to dict
+            graph_spec_dict = {
+                "graph_type": paragraph_graph_spec.graph_type,
+                "x_label": paragraph_graph_spec.x_label,
+                "y_label": paragraph_graph_spec.y_label,
+                "x_values": paragraph_graph_spec.x_values,
+                "y_values": paragraph_graph_spec.y_values,
+                "y_unit": paragraph_graph_spec.y_unit,
+                "raw_long_description": paragraph_graph_spec.raw_long_description,
+                "long_description_html": paragraph_graph_spec.long_description_html,
+            }
+            
+            # Build prompt for paragraph graph
+            prompt_text = _build_prompt_paragraph_graph_multiple_choice(
+                original_html,
+                paragraph_text_no_svg,
+                original_explanation,
+                original_choices,
+                correct_letter,
+                graph_spec_dict,
+                category,
+                section,
+                difficulty,
+            )
+            
+            structured_llm = llm.with_structured_output(GeneratedParagraphGraphMultipleChoiceContent)
+            result_pg: GeneratedParagraphGraphMultipleChoiceContent = structured_llm.invoke(
+                [HumanMessage(content=prompt_text)]
+            )
+            
+            # Validate results
+            new_choices = result_pg.choices or []
+            if len(new_choices) != 4:
+                raise ValueError(f"LLM phải trả về đúng 4 choices, nhận được {len(new_choices)}.")
+            new_choices = [str(c).strip() for c in new_choices[:4]]
+            new_letter = (result_pg.correct_answer_letter or "").strip().upper()
+            if new_letter not in ("A", "B", "C", "D"):
+                raise ValueError(f"correct_answer_letter phải là A, B, C hoặc D, nhận được: {result_pg.correct_answer_letter!r}")
+            
+            new_question_text = (result_pg.question or "").strip()
+            new_explanation = (result_pg.explanation or "").strip()
+            new_paragraph_text = (result_pg.paragraph_text or "").strip()
+            
+            if not new_question_text:
+                raise ValueError("LLM không trả về nội dung câu hỏi.")
+            if not new_explanation:
+                raise ValueError("LLM không trả về explanation.")
+            if not new_paragraph_text:
+                raise ValueError("LLM không trả về paragraph text.")
+            
+            # VERIFY CORRECT ANSWER based on paragraph graph data
+            verified_letter = _verify_graph_correct_answer(
+                new_question_text,
+                new_choices,
+                result_pg.new_x_values,
+                result_pg.new_y_values,
+                new_letter,
+            )
+            
+            if verified_letter != new_letter:
+                print(f"⚠️  WARNING (Paragraph Graph): LLM returned correct_answer_letter={new_letter}, but based on graph data, the correct answer should be {verified_letter}")
+                print(f"   Question asks for: {new_question_text[:100]}...")
+                print(f"   Auto-correcting to: {verified_letter}")
+                
+                # Update explanation to match corrected answer
+                new_explanation = _update_explanation_for_corrected_answer(
+                    new_explanation,
+                    new_letter,
+                    verified_letter,
+                    new_choices,
+                )
+                
+                new_letter = verified_letter
+            
+            # Regenerate paragraph with new graph
+            updated_paragraph_html = _update_graph_in_html(
+                original_paragraph,
+                old_x_values=paragraph_graph_spec.x_values,
+                old_y_values=paragraph_graph_spec.y_values,
+                new_x_values=result_pg.new_x_values,
+                new_y_values=result_pg.new_y_values,
+                new_long_description=result_pg.new_long_description,
+                x_label=paragraph_graph_spec.x_label or "Year",
+                y_label=paragraph_graph_spec.y_label or "Percent",
+                y_unit=paragraph_graph_spec.y_unit or "%",
+                graph_type=paragraph_graph_spec.graph_type or "line",
+            )
+            
+            # Extract figure block from updated paragraph
+            figure_match = re.search(
+                r"<figure[^>]*>.*?</figure>",
+                updated_paragraph_html,
+                flags=re.DOTALL | re.IGNORECASE
+            )
+            
+            # Reconstruct paragraph: figure + long description + text
+            if figure_match:
+                figure_block = figure_match.group(0)
+                # Add long description div after figure (if not already included)
+                long_desc_match = re.search(
+                    r'<div[^>]*class="sr-only"[^>]*>.*?</div>',
+                    updated_paragraph_html,
+                    flags=re.DOTALL | re.IGNORECASE
+                )
+                long_desc_div = long_desc_match.group(0) if long_desc_match else ""
+                
+                # Combine: figure + long_desc + paragraph_text
+                new_paragraph = f"{figure_block}{long_desc_div}\n<p>{new_paragraph_text}</p>"
+            else:
+                # Fallback: just use text
+                new_paragraph = f"<p>{new_paragraph_text}</p>"
+            
+            new_question_content = {
+                "paragraph": new_paragraph,
+                "question": new_question_text,
+                "choices": new_choices,
+                "correct_answer": [new_letter],
+                "explanation": new_explanation,
+            }
         # Kiểm tra nếu câu hỏi có đồ thị → dùng luồng xử lý riêng (không truyền SVG vào prompt)
-        if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
+        elif graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
             # ========== LUỒNG XỬ LÝ CÂU HỎI CÓ ĐỒ THỊ ==========
             # Loại bỏ SVG và long description khỏi HTML để giảm token
             # Long description sẽ được xử lý riêng và chèn vào figure block
@@ -967,6 +1342,30 @@ def generate_new_question(
                 raise ValueError("LLM không trả về nội dung câu hỏi.")
             if not new_explanation:
                 raise ValueError("LLM không trả về explanation.")
+            
+            # VERIFY CORRECT ANSWER based on graph data
+            verified_letter = _verify_graph_correct_answer(
+                new_question_text_no_svg,
+                new_choices,
+                result_graph.new_x_values,
+                result_graph.new_y_values,
+                new_letter,
+            )
+            
+            if verified_letter != new_letter:
+                print(f"⚠️  WARNING: LLM returned correct_answer_letter={new_letter}, but based on graph data, the correct answer should be {verified_letter}")
+                print(f"   Question asks for: {new_question_text_no_svg[:100]}...")
+                print(f"   Auto-correcting to: {verified_letter}")
+                
+                # Update explanation to match corrected answer
+                new_explanation = _update_explanation_for_corrected_answer(
+                    new_explanation,
+                    new_letter,
+                    verified_letter,
+                    new_choices,
+                )
+                
+                new_letter = verified_letter
             
             # Tạo SVG mới bằng matplotlib và cập nhật long description
             updated_html_with_svg = _update_graph_in_html(
@@ -1064,7 +1463,6 @@ def generate_new_question(
     elif generate_full:
         # Không phải multiple-choice hoặc thiếu 4 choices: sinh question, explanation, correct_answer (nội dung)
         # Kiểm tra nếu câu hỏi có đồ thị → dùng luồng xử lý riêng (không truyền SVG vào prompt)
-        print(graph_spec)
         if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
             # ========== LUỒNG XỬ LÝ CÂU HỎI TỰ LUẬN CÓ ĐỒ THỊ ==========
             # Loại bỏ SVG và long description khỏi HTML để giảm token

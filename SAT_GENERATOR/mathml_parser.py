@@ -59,6 +59,49 @@ class MathMLParser:
 
         return {"text": text, "graph": graph}
 
+    def parse_paragraph(self, paragraph_html: str) -> Dict[str, Any]:
+        """
+        Parse paragraph HTML that may contain a graph.
+        
+        Return:
+        {
+          "text": "...",  # Plain text of paragraph (no SVG/graph)
+          "graph": GraphSpec | None,  # Graph info if present
+          "has_graph": bool,  # Whether paragraph contains a graph
+          "original_html": str  # Original HTML for reference
+        }
+        """
+        s = (paragraph_html or "").strip()
+        if not s:
+            return {"text": "", "graph": None, "has_graph": False, "original_html": ""}
+
+        # Remove MathML namespace
+        s = s.replace('xmlns="http://www.w3.org/1998/Math/MathML"', '')
+
+        # --- Step 1: Extract graph long description ---
+        long_desc_result = self._extract_graph_long_description(s)
+        graph = self._long_desc_to_graphspec(long_desc_result, full_html=s) if long_desc_result else None
+        has_graph = graph is not None
+
+        # --- Step 2: Remove SVG and sr-only div entirely to get paragraph text ---
+        s_wo_svg = self._remove_svg_blocks(s)
+        s_wo_svg = self._remove_sr_only(s_wo_svg)  # Remove long description div
+
+        # --- Step 3: Parse remaining HTML to get text ---
+        try:
+            root = ET.fromstring(f"<root>{s_wo_svg}</root>")
+            text = self._parse_children(root).strip()
+        except Exception:
+            # fallback: remove tags roughly
+            text = self._strip_tags_fallback(s_wo_svg).strip()
+
+        return {
+            "text": text,
+            "graph": graph,
+            "has_graph": has_graph,
+            "original_html": paragraph_html
+        }
+
     # ----------------------------
     # Text + MathML parsing
     # ----------------------------
@@ -133,13 +176,23 @@ class MathMLParser:
             Dict with 'html' (original HTML structure), 'text' (plain text for parsing),
             and 'aria_label' (the aria-label text for graph type detection)
         """
-        # robust regex: get content inside <div ... aria-label="Long description ..."> ... </div>
+        # More flexible regex: match <div> with aria-label and class="sr-only" in any order
+        # Pattern 1: aria-label first
         m = re.search(
-            r'aria-label="(Long description[^"]*)"\s+class="sr-only"\s*>'
+            r'<div[^>]*aria-label="(Long description[^"]*)"[^>]*class="sr-only"[^>]*>'
             r'(.*?)</div>',
             html,
             flags=re.DOTALL | re.IGNORECASE
         )
+        
+        # Pattern 2: class first
+        if not m:
+            m = re.search(
+                r'<div[^>]*class="sr-only"[^>]*aria-label="(Long description[^"]*)"[^>]*>'
+                r'(.*?)</div>',
+                html,
+                flags=re.DOTALL | re.IGNORECASE
+            )
         if not m:
             return None
 
@@ -286,6 +339,11 @@ class MathMLParser:
     def _remove_svg_blocks(self, html: str) -> str:
         # Remove <svg>...</svg> completely
         html = re.sub(r'<svg\b.*?</svg>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        return html
+
+    def _remove_sr_only(self, html: str) -> str:
+        # Remove sr-only div containing long description
+        html = re.sub(r'<div[^>]*class="sr-only"[^>]*>.*?</div>', '', html, flags=re.DOTALL | re.IGNORECASE)
         return html
 
     def _strip_tags_fallback(self, html: str) -> str:

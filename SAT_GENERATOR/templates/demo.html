@@ -147,6 +147,31 @@
       font-style: italic;
     }
 
+    /* Styling for graphs in paragraphs */
+    .card .content figure {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .card .content svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .card .content .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
     .loading {
       color: var(--muted);
     }
@@ -306,6 +331,11 @@
         }
 
         let html = "";
+        // Display new paragraph if it exists (may contain graph)
+        if (data.new_paragraph_html) {
+          html += "<p><strong>Paragraph mới (có thể chứa đồ thị)</strong></p>";
+          html += "<div class=\"content\" style=\"margin-bottom:1em; padding: 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border);\">" + data.new_paragraph_html + "</div>";
+        }
         html += "<p><strong>Câu hỏi mới</strong></p>";
         html += "<div class=\"content\">" + (data.new_question_text || "—") + "</div>";
         if (data.new_choices_html && data.new_choices_html.length === 4) {

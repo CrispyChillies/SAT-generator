@@ -153,10 +153,13 @@ def api_run_flow():
         new_correct_answer_html = ""
     # Chuẩn hóa choices cho frontend (HTML từng option)
     new_choices_html = [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
+    # Lấy paragraph nếu có (có thể chứa graph)
+    new_paragraph_html = _normalize_math_html((new_q_block.get("paragraph") or "").strip())
     out = {
         "steps_json_path": result.get("steps_json_path"),
         "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
         "new_question_item": new_item,
+        "new_paragraph_html": new_paragraph_html,
         "new_explanation_html": _normalize_math_html((new_q_block.get("explanation") or "").strip()),
         "new_correct_answer_html": new_correct_answer_html,
         "new_choices_html": new_choices_html,
