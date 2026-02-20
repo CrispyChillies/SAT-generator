@@ -86,9 +86,11 @@ def get_question(question_id: str):
         return jsonify({"error": str(e)}), 404
 
     q_block = sample.get("question") or {}
-    print("question block:", q_block)
+    # print("question block:", q_block)
     correct_answer_raw = q_block.get("correct_answer") or sample.get("correct_answer")
     correct_answer_display = preprocess_correct_answer(sample)
+
+
 
     return jsonify({
         "id": sample.get("id"),
@@ -97,6 +99,7 @@ def get_question(question_id: str):
         "category": sample.get("category"),
         "difficulty": sample.get("difficulty"),
         "type": sample.get("type"),
+        "paragraph_html": (q_block.get("paragraph") or "").strip(),  # Thêm dòng này
         "question_html": _normalize_math_html((q_block.get("question") or "").strip()),
         "explanation_html": (q_block.get("explanation") or "").strip(),
         "correct_answer_letter": (

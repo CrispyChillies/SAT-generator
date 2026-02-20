@@ -43,6 +43,7 @@ class GeneratedQuestionContent(BaseModel):
     question: str = Field(description="New question content in the same HTML and MathML format as the sample, with only numerical values changed")
     explanation: str = Field(description="New explanation in the same HTML and MathML format as the sample, with only numerical values changed to match the new question")
     correct_answer: str = Field(description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right choice or value)")
+    new_paragraph: Optional[str] = Field(default=None, description="If the sample has a paragraph, generate a new paragraph with updated numbers that match the new question. If sample has no paragraph, this should be null.")
 
 
 class GeneratedMultipleChoiceContent(BaseModel):
@@ -51,6 +52,7 @@ class GeneratedMultipleChoiceContent(BaseModel):
     explanation: str = Field(description="New explanation, same format with only numbers changed to match the new question")
     choices: List[str] = Field(description="Exactly 4 answer choices in order A, B, C, D; each is HTML+MathML string with only numbers changed")
     correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer (A, B, C, or D)")
+    new_paragraph: Optional[str] = Field(default=None, description="If the sample has a paragraph, generate a new paragraph with updated numbers that match the new question. If sample has no paragraph, this should be null.")
 
     @field_validator("choices")
     @classmethod
@@ -69,6 +71,7 @@ class GeneratedGraphQuestionContent(BaseModel):
     new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
     new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
     new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
+    new_paragraph: Optional[str] = Field(default=None, description="If the sample has a paragraph, generate a new paragraph with updated numbers that match the new question. If sample has no paragraph, this should be null.")
 
     @field_validator("choices")
     @classmethod
@@ -96,6 +99,7 @@ class GeneratedGraphFreeResponseContent(BaseModel):
     new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
     new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
     new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
+    new_paragraph: Optional[str] = Field(default=None, description="If the sample has a paragraph, generate a new paragraph with updated numbers that match the new question. If sample has no paragraph, this should be null.")
     
     @field_validator("new_y_values")
     @classmethod
@@ -531,6 +535,7 @@ def _build_prompt_graph_multiple_choice(
     category: str,
     section: str,
     difficulty: str,
+    original_paragraph: Optional[str] = None,
 ) -> str:
     """Prompt cho câu hỏi multiple-choice có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
     choices_text = "\n".join(
@@ -541,6 +546,19 @@ def _build_prompt_graph_multiple_choice(
     long_desc_html = graph_spec.get("long_description_html", "")
     
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    # Handle paragraph
+    paragraph_section = ""
+    if original_paragraph:
+        paragraph_section = f"""
+
+Sample PARAGRAPH (context before the question):
+---
+{original_paragraph}
+---
+
+IMPORTANT: You MUST also generate new_paragraph with updated numbers that match your new question data.
+"""
     
     return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question with a GRAPH/CHART.
 
@@ -588,7 +606,7 @@ Sample 4 choices (correct answer in the sample is {correct_letter}, but you may 
 {choices_text}
 ---
 
-Category: {category}. Section: {section}. Difficulty: {difficulty}.
+Category: {category}. Section: {section}. Difficulty: {difficulty}.{paragraph_section}
 
 Return a JSON object with:
 - question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
@@ -598,6 +616,7 @@ Return a JSON object with:
 - new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...] or [1.0, 2.0, 3.0, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
+- new_paragraph: {"If sample has paragraph, generate new paragraph with numbers matching the new question. Same HTML format, only numbers changed." if original_paragraph else "null (no paragraph in sample)"}
 """
 
 
@@ -609,6 +628,7 @@ def _build_prompt_graph_free_response(
     category: str,
     section: str,
     difficulty: str,
+    original_paragraph: Optional[str] = None,
 ) -> str:
     """Prompt cho câu hỏi tự luận có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
     
@@ -617,6 +637,19 @@ def _build_prompt_graph_free_response(
     graph_type = graph_spec.get("graph_type", "unknown")
     
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    # Handle paragraph
+    paragraph_section = ""
+    if original_paragraph:
+        paragraph_section = f"""
+
+Sample PARAGRAPH (context before the question):
+---
+{original_paragraph}
+---
+
+IMPORTANT: You MUST also generate new_paragraph with updated numbers that match your new question data.
+"""
     
     return f"""You are an SAT question writer. This is a FREE-RESPONSE question with a GRAPH/CHART.
 
@@ -711,7 +744,21 @@ def _build_prompt(
     section: str,
     q_type: str,
     difficulty: str,
+    original_paragraph: Optional[str] = None,
 ) -> str:
+    # Handle paragraph
+    paragraph_section = ""
+    if original_paragraph:
+        paragraph_section = f"""
+
+        Sample PARAGRAPH (context before the question):
+        ---
+        {original_paragraph}
+        ---
+
+        IMPORTANT: You MUST also generate new_paragraph with updated numbers that match your new question data.
+        """
+    
     return f"""You are an SAT question writer. Task: take the sample question, explanation, and correct answer below and change ONLY the numerical values. Do NOT change any other content.
 
 STRICT rules:
@@ -734,9 +781,10 @@ Sample explanation (HTML + MathML):
 Sample correct answer (content of the right choice, HTML + MathML):
 ---
 {original_correct_answer}
----
+---{paragraph_section}
 
-Return a JSON object with keys: question, explanation, correct_answer. Each value: same string as sample with only numbers substituted; numbers must be consistent across all three."""
+Return a JSON object with keys: question, explanation, correct_answer, new_paragraph. Each value: same string as sample with only numbers substituted; numbers must be consistent across all three.
+- new_paragraph: {"Generate new paragraph with numbers matching the new question. Same HTML format, only numbers changed." if original_paragraph else "null (no paragraph in sample)"}"""
 
 
 def _get_choices(sample: Dict[str, Any]) -> List[str]:
@@ -769,11 +817,25 @@ def _build_prompt_multiple_choice(
     category: str,
     section: str,
     difficulty: str,
+    original_paragraph: Optional[str] = None,
 ) -> str:
     """Prompt cho multiple-choice: sinh question, explanation, 4 choices, và correct_answer_letter."""
     choices_text = "\n".join(
         f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
     )
+    
+    # Handle paragraph
+    paragraph_section = ""
+    if original_paragraph:
+        paragraph_section = f"""
+
+        Sample PARAGRAPH (context before the question):
+        ---
+        {original_paragraph}
+        ---
+
+        IMPORTANT: You MUST also generate new_paragraph with updated numbers that match your new question data.
+        """
     return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter.
 
 STRICT rules:
@@ -796,13 +858,14 @@ Sample explanation (HTML + MathML):
 Sample 4 choices (correct answer is {correct_letter}):
 ---
 {choices_text}
----
+---{paragraph_section}
 
-Return a JSON object with keys: question, explanation, choices, correct_answer_letter.
+Return a JSON object with keys: question, explanation, choices, correct_answer_letter, new_paragraph.
 - question: new question string (only numbers changed).
 - explanation: new explanation string (only numbers changed, consistent with new question).
 - choices: list of exactly 4 strings, in order A, B, C, D (only numbers changed in each).
-- correct_answer_letter: one of "A", "B", "C", "D" (the correct choice for the new question; typically the same as the sample, {correct_letter})."""
+- correct_answer_letter: one of "A", "B", "C", "D" (the correct choice for the new question; typically the same as the sample, {correct_letter}).
+- new_paragraph: {"Generate new paragraph with numbers matching the new question. Same HTML format, only numbers changed." if original_paragraph else "null (no paragraph in sample)"}"""
 
 
 
@@ -844,6 +907,7 @@ def generate_new_question(
     original_choices = _get_choices(sample)
     correct_letter = _get_correct_answer_letter(sample)
     original_correct_answer = _get_correct_answer_content(sample)
+    original_paragraph = sample.get("question", {}).get("paragraph")
     is_multiple_choice = (q_type == "multiple-choice") and len(original_choices) == 4 and correct_letter and original_explanation
     generate_full = bool(original_explanation and original_correct_answer)
 
@@ -879,6 +943,7 @@ def generate_new_question(
                 category,
                 section,
                 difficulty,
+                original_paragraph,
             )
             
             structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
@@ -954,7 +1019,7 @@ def generate_new_question(
                 new_question_text = new_question_text_no_svg
             
             new_question_content = {
-                "paragraph": sample.get("question", {}).get("paragraph"),
+                "paragraph": result_graph.new_paragraph,
                 "question": new_question_text,
                 "choices": new_choices,
                 "correct_answer": [new_letter],
@@ -969,6 +1034,7 @@ def generate_new_question(
                 category,
                 section,
                 difficulty,
+                original_paragraph,
             )
             structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
             result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(
@@ -988,7 +1054,7 @@ def generate_new_question(
             if not new_explanation:
                 raise ValueError("LLM không trả về explanation.")
             new_question_content = {
-                "paragraph": sample.get("question", {}).get("paragraph"),
+                "paragraph": result_mc.new_paragraph,
                 "question": new_question_text,
                 "choices": new_choices,
                 "correct_answer": [new_letter],
@@ -1027,6 +1093,7 @@ def generate_new_question(
                 category,
                 section,
                 difficulty,
+                original_paragraph,
             )
             
             structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
@@ -1091,7 +1158,7 @@ def generate_new_question(
                 new_question_text = new_question_text_no_svg
             
             new_question_content = {
-                "paragraph": sample.get("question", {}).get("paragraph"),
+                "paragraph": result_free_response.new_paragraph,
                 "question": new_question_text,
                 "choices": None,
                 "correct_answer": new_correct_answer,
@@ -1122,7 +1189,7 @@ def generate_new_question(
             if not new_correct_answer:
                 raise ValueError("LLM không trả về correct_answer.")
             new_question_content = {
-                "paragraph": sample.get("question", {}).get("paragraph"),
+                "paragraph": result.new_paragraph,
                 "question": new_question_text,
                 "choices": None,
                 "correct_answer": new_correct_answer,
@@ -1146,7 +1213,7 @@ Return only the new question string (same format, numbers changed)."""
         if not new_question_text:
             raise ValueError("LLM không trả về nội dung câu hỏi.")
         new_question_content = {
-            "paragraph": sample.get("question", {}).get("paragraph"),
+            "paragraph": None,  # Question-only mode doesn't regenerate paragraph
             "question": new_question_text,
             "choices": None,
             "correct_answer": None,

@@ -6,7 +6,7 @@ def generate_html():
     # Read the questions from question.json
     # Get the directory where this script is located
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    questions_file = os.path.join(script_dir, 'questions_practice_test.json')
+    questions_file = os.path.join(script_dir, '/home/aaronpham5504/Coding/SAT-generator/SAT_GENERATOR/data/generated_20260218_165513.json')
     
     with open(questions_file, 'r', encoding='utf-8') as f:
         questions = json.load(f)
@@ -229,7 +229,7 @@ def generate_html():
 """
     
     # Write HTML file
-    html_file = os.path.join(script_dir, 'questions_display.html')
+    html_file = os.path.join(script_dir, 'temp.html')
     with open(html_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     

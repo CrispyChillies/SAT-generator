@@ -2,15 +2,15 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "find_max_increase_period",
+      "function_name": "subtract",
       "params_meaning": [
         {
-          "param": "values",
-          "meaning": "the recorded measurements of temperature at each time point"
+          "param": "a",
+          "meaning": "the ending percentage value from the graph"
         },
         {
-          "param": "labels",
-          "meaning": "the time points at which each temperature measurement was recorded"
+          "param": "b",
+          "meaning": "the starting percentage value from the graph"
         }
       ]
     }
