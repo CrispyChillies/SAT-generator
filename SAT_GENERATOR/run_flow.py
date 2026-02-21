@@ -27,7 +27,6 @@ from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
-
 # ---------------------------------------------------------------------------
 # Import modules for Math flow
 # ---------------------------------------------------------------------------
@@ -329,6 +328,9 @@ def run_rw_flow(
         - error: Error message if any
         - _rw_original_analysis: Original question analysis (internal/debug)
     """
+    out_dir = Path(out_dir) if out_dir else Path("output")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {
@@ -415,12 +417,12 @@ def run_rw_flow(
                     print("✗ Solver's answer differs from correct answer")
         
         # Save reasoning trace
-        # if out_dir:
-        #     trace_path = out_dir / "original_question_reasoning.json"
-        #     with open(trace_path, "w", encoding="utf-8") as f:
-        #         json.dump(original_analysis, f, ensure_ascii=False, indent=2)
-        #     if verbose:
-        #         print(f"Saved reasoning trace to {trace_path}")
+        if out_dir:
+            trace_path = out_dir / "original_question_reasoning.json"
+            with open(trace_path, "w", encoding="utf-8") as f:
+                json.dump(original_analysis, f, ensure_ascii=False, indent=2)
+            if verbose:
+                print(f"Saved reasoning trace to {trace_path}")
     
     except Exception as e:
         result_bag["error"] = f"Error analyzing original: {e}"
@@ -436,7 +438,6 @@ def run_rw_flow(
         print("=" * 70)
     
     try:
-        # Pass api_key and verbose to ensure proper LLM initialization and debugging
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(model=model, temperature=0.7, api_key=api_key)
         new_question = generate_new_rw_question(

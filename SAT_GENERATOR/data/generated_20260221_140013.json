@@ -1,0 +1,25 @@
+{
+  "category": "Information and Ideas",
+  "difficulty": "Hard",
+  "id": "749b60b5-39e5-4dd1-b2c8-0d37d3a88531",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "A. Ruiz and her team had a more conservative approach to classifying tree species compared to the researchers of the 2019 survey, which could explain the lower count.",
+      "B. the increase in identified species may stem from the newer researchers considering some variations of trees as separate species, while Ruiz's team classified them as the same.",
+      "C. the researchers of the 2019 survey may have included non-native species that Ruiz and her team did not account for in their survey.",
+      "D. the classification methods used by both surveys were identical, suggesting that the increase in species count was purely due to environmental changes. "
+    ],
+    "correct_answer": [
+      "B"
+    ],
+    "explanation": "Choice B is the best answer because it logically connects the increased species count in the 2019 survey to the possibility that the newer researchers classified certain tree variations as distinct species, while Ruiz and her team treated them as variations within the same species. This aligns with the paragraph's focus on the evolving classification criteria for tree species. \n\nChoice A is incorrect because it implies a conservative approach by Ruiz's team without addressing the crucial role of classification criteria in the discrepancy. If Ruiz's team were more conservative, it would likely lead to a higher count, not a lower one. \n\nChoice C is flawed because the paragraph does not mention non-native species as a factor in the discrepancies; thus, claiming the 2019 survey included them does not follow from the information provided. \n\nChoice D is irrelevant because it incorrectly states that both surveys used identical classification methods, which contradicts the paragraph's assertion that classification criteria have evolved over time. This choice fails to address the actual reasons behind the discrepancies in species counts.",
+    "paragraph": "In a comprehensive 2019 survey of urban tree diversity, researchers found over 500 distinct species in the central park of Green City, a number significantly higher than the 300 species identified in the 2010 survey conducted by botanist Elena Ruiz and her team. While part of this discrepancy can be attributed to the introduction of new tree species into the park, another contributing factor is the evolving classification criteria for identifying tree species, which have become more inclusive and detailed over the past decade. The two surveys reported similar counts of common tree species like oaks and maples, indicating that <span aria-hidden=\"true\">______</span>",
+    "question": "Which choice most logically completes the text?"
+  },
+  "section": "Reading and Writing",
+  "skill": "Inferences",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

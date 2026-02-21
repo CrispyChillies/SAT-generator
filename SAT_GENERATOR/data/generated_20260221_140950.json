@@ -1,0 +1,25 @@
+{
+  "category": "Information and Ideas",
+  "difficulty": "Medium",
+  "id": "b57eaa0b-de58-4b0b-a383-dca2a2f830c9",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "A. highlight the need for more resources to support the documentation of oral histories in academia.",
+      "B. emphasize the challenge of integrating oral history into conventional historical narratives.",
+      "C. support the argument that oral history is a vital tool for historians seeking to capture diverse perspectives.",
+      "D. illustrate the ongoing debate among scholars regarding the reliability of oral historical accounts."
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "Choice C is the best answer. The paragraph illustrates how Clara Martinez's work in oral history, initially met with skepticism, has become recognized as valuable for historians, thus supporting the argument that oral history captures diverse perspectives essential to understanding history. \n\nChoice A is incorrect because it introduces a new idea not supported by the text; the focus is on the value of oral histories rather than the resources needed for their documentation. \n\nChoice B is partially correct but incomplete; while it does touch on the challenge of integrating oral histories, it does not capture the main idea of the text, which emphasizes the eventual recognition of their value. \n\nChoice D is logically flawed; the text does mention initial skepticism about oral histories but emphasizes their eventual acceptance and value, not ongoing debates about reliability.",
+    "paragraph": "In his 2022 study \"The Echoes of Forgotten Voices: The Role of Oral History in Modern Scholarship,\" researcher Michael Tran examines the contributions of oral historians like Clara Martinez (1940–2020), who dedicated her life to collecting personal narratives from marginalized communities. Martinez faced significant skepticism from traditional historians, who often dismissed oral histories as unreliable. It wasn’t until the early 2000s, well after her most impactful work, that several academic institutions began to appreciate the value of oral history for understanding cultural and social dynamics. Thus, the work of Martinez serves to <span aria-hidden=\"true\">______</span>",
+    "question": "Which choice most logically completes the text?"
+  },
+  "section": "Reading and Writing",
+  "skill": "Inferences",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

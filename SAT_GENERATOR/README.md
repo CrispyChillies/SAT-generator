@@ -196,3 +196,87 @@ Mở trình duyệt: **http://localhost:5000**
 ## Thư mục data
 
 Thư mục **`data/`** chứa các câu hỏi đã sinh khi người dùng bấm **Save sample** trên Web Demo (chỉ hiện khi đáp án C và D khớp). Mỗi file có dạng `generated_YYYYMMDD_HHMMSS.json`, cấu trúc giống một item trong `questions_practice_test.json` (id, subject, section, category, question với question, explanation, choices, correct_answer, …).
+
+# System architecture
+
+📦 NEW SYSTEM ARCHITECTURE:
+```
+                        run_flow.py (Unified Entry Point)
+                                     |
+                    Automatic Question Type Detection
+                                     |
+                    ┌────────────────┴────────────────┐
+                    ↓                                 ↓
+            Math Questions                   R&W Questions
+                    |                                 |
+           run_math_flow()                   run_rw_flow()
+                    |                                 |
+        ┌───────────┴───────────┐         ┌──────────┴──────────┐
+        ↓           ↓           ↓         ↓          ↓          ↓
+     Agent    Generate      Solve     Analyze   Generate   Validate
+        |           |           |         |          |          |
+   Steps JSON  New Question  Answer   Reasoning  New Q   Validation
+```
+
+📁 FILES CREATED/MODIFIED:
+```
+Core R&W System:
+  ✓ rw_reasoning_tools.py      (12KB) - 8 Reasoning Tools
+  ✓ generate_rw_question.py    (17KB) - R&W Question Generator
+  ✓ rw_question_solver.py      (13KB) - R&W Solver & Validator
+  ✓ run_rw_flow.py             (13KB) - Standalone R&W Flow
+```
+```
+Integration:
+  ✓ run_flow.py                (25KB) - Enhanced with Auto-Routing
+  ✓ test_integrated_flow.py    (4.1KB) - Integration Tests
+```
+```
+Documentation:
+  ✓ INTEGRATED_FLOW_README.md  (8.1KB) - Full Documentation
+  ✓ QUICK_REFERENCE.md         (3.9KB) - Quick Commands
+  ✓ INTEGRATION_SUMMARY.md     (8.7KB) - This Summary
+```
+
+🎯 KEY FEATURES:
+```
+  ✅ Automatic Type Detection - No manual configuration
+  ✅ Unified Interface - One command for all types
+  ✅ Dual Pipelines - Math (computational) + R&W (reasoning)
+  ✅ Full Validation - Both original and generated questions
+  ✅ Complete Documentation - 3 levels of docs provided
+  ✅ Backward Compatible - Existing Math flow unchanged
+  ✅ Tested & Verified - Both flows working correctly
+```
+
+🎓 R&W CAPABILITIES:
+
+  Supported Skills:
+    • Inferences
+    • Command of Evidence
+    • Central Ideas and Details
+    • Words in Context
+    • Rhetorical Synthesis
+    • Form, Structure, and Sense
+    • Boundaries
+
+  Generation Features:
+    ✓ Completely new scenarios (different topics)
+    ✓ Preserves reasoning structure
+    ✓ Maintains difficulty level
+    ✓ Proper distractor patterns
+    ✓ Clear explanations
+
+
+📊 OUTPUT STRUCTURE:
+
+  Math Questions:
+    output/
+    ├── steps_function_and_meaning.json
+    └── new_question.json
+
+  R&W Questions:
+    output/
+    ├── original_question_reasoning.json
+    ├── new_question.json
+    └── new_question_validation.json
