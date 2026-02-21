@@ -12,6 +12,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Literal
 import argparse
 import uuid
+import io
+import re
+
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import numpy as np
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
@@ -68,6 +75,28 @@ class GeneratedRWQuestionWithTable(BaseModel):
     table_headers: List[str] = Field(description="Column headers (same number as original)")
     table_row_labels: List[str] = Field(description="Row labels (same number as original)")
     table_data: List[List[str]] = Field(description="Table data cells (same structure as original)")
+    question: str = Field(description="New question text (usually same as original)")
+    choices: List[str] = Field(description="Exactly 4 answer choices")
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="Letter of the correct answer")
+    explanation: str = Field(description="Explanation of the correct answer")
+    
+    @field_validator("choices")
+    @classmethod
+    def validate_choices(cls, v):
+        if len(v) != 4:
+            raise ValueError("Must have exactly 4 choices")
+        return v
+
+
+class GeneratedRWQuestionWithGroupedBarChart(BaseModel):
+    """Generated R&W question with grouped bar chart (new scenario with new data)."""
+    paragraph_text: str = Field(description="New paragraph text WITHOUT the graph (describes new scenario)")
+    graph_title: str = Field(description="New graph title")
+    graph_y_label: str = Field(description="Y-axis label (appropriate for new data)")
+    graph_groups: List[str] = Field(description="Group names (same number as original, e.g., ['condition A', 'condition B'])")
+    graph_categories: List[str] = Field(description="Category names on X-axis (same number as original)")
+    # Flatten the data structure - each category's data as a separate field
+    graph_data_flat: List[float] = Field(description="Flattened data: for each category, provide values for each group in order")
     question: str = Field(description="New question text (usually same as original)")
     choices: List[str] = Field(description="Exactly 4 answer choices")
     correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="Letter of the correct answer")
@@ -189,6 +218,163 @@ def _infer_logical_schema(skill: str, paragraph: str, choices: List[str]) -> str
         return "Given information + goal → synthesize appropriate statement"
     else:
         return "Logical evaluation of choices against paragraph evidence"
+
+
+def _generate_grouped_bar_chart_svg(
+    title: str,
+    y_label: str,
+    groups: List[str],
+    categories: List[str],
+    data: Dict[str, Dict[str, float]],
+    y_range: Optional[tuple] = None,
+) -> str:
+    """
+    Generate grouped bar chart SVG using matplotlib.
+    
+    Args:
+        title: Graph title
+        y_label: Y-axis label
+        groups: List of group names (e.g., ["Group A", "Group B"])
+        categories: List of category names (X-axis labels)
+        data: Nested dict {category: {group: value}}
+        y_range: Optional (min, max, increment) for y-axis
+    
+    Returns:
+        SVG string
+    """
+    # Set up the figure with SAT-style formatting
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Prepare data for grouped bars
+    num_groups = len(groups)
+    num_categories = len(categories)
+    x = np.arange(num_categories)
+    width = 0.35  # Width of bars
+    
+    # Colors: light gray and dark gray (matching SAT style)
+    colors = ['#B3B3B3', '#333333']
+    
+    # Plot bars for each group
+    for i, group in enumerate(groups):
+        values = [data.get(cat, {}).get(group, 0) for cat in categories]
+        offset = (i - num_groups/2 + 0.5) * width
+        ax.bar(x + offset, values, width, label=group, color=colors[i % len(colors)],
+               edgecolor='black', linewidth=0.9)
+    
+    # Customize axes
+    ax.set_ylabel(y_label, fontfamily='serif', fontsize=12)
+    ax.set_title(title, fontfamily='serif', fontsize=13, wrap=True)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontfamily='serif', fontsize=11, rotation=-40, ha='right')
+    
+    # Set y-axis range if provided
+    if y_range:
+        y_min, y_max, y_inc = y_range
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks(np.arange(y_min, y_max + y_inc, y_inc))
+    
+    # Format y-axis
+    ax.tick_params(axis='y', labelsize=11)
+    for label in ax.get_yticklabels():
+        label.set_fontfamily('serif')
+    
+    # Add legend
+    ax.legend(loc='upper right', frameon=True, fontsize=11, prop={'family': 'serif'})
+    
+    # Grid and styling
+    ax.grid(axis='y', alpha=0.3, linestyle='-', linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save to SVG string
+    svg_buffer = io.StringIO()
+    plt.savefig(svg_buffer, format='svg', bbox_inches='tight')
+    plt.close(fig)
+    
+    svg_string = svg_buffer.getvalue()
+    svg_buffer.close()
+    
+    return svg_string
+
+
+def _build_long_description_html(
+    title: str,
+    groups: List[str],
+    categories: List[str],
+    data: Dict[str, Dict[str, float]],
+) -> str:
+    """
+    Build the sr-only long description HTML for grouped bar chart.
+    
+    Args:
+        title: Graph title
+        groups: List of group names
+        categories: List of category names
+        data: Nested dict {category: {group: value}}
+    
+    Returns:
+        HTML string for sr-only div with long description
+    """
+    html = f'<div aria-label="Long description for bar graph titled {title}" class="sr-only" role="region">\n'
+    html += '<ul>\n'
+    
+    # Section 1: Group names
+    html += '<li>For each data category, the following bars are shown: <br/>\n<ul>\n'
+    for group in groups:
+        html += f'<li>{group}</li>\n'
+    html += '</ul>\n</li>\n'
+    
+    # Section 2: Data by category
+    html += f'<li>The data for the {len(categories)} categories are as follows: <br/>\n<ul>\n'
+    for category in categories:
+        html += f'<li>{category}:\n<ul>\n'
+        if category in data:
+            for group, value in data[category].items():
+                # Format numbers with commas for readability
+                formatted_value = f"{int(value):,}" if value == int(value) else f"{value:,.1f}"
+                html += f'<li>{group}: {formatted_value}</li>\n'
+        html += '</ul>\n</li>\n'
+    
+    html += '</ul>\n</li>\n'
+    html += '</ul>\n'
+    html += '</div>'
+    
+    return html
+
+
+def _build_figure_block_with_graph(
+    svg_string: str,
+    long_description_html: str,
+    paragraph_text: str,
+) -> str:
+    """
+    Build complete figure block with SVG and long description, then combine with paragraph.
+    
+    Args:
+        svg_string: SVG content (full <svg>...</svg>)
+        long_description_html: Long description div (<div class="sr-only">...</div>)
+        paragraph_text: Paragraph text (without graph)
+    
+    Returns:
+        Complete paragraph HTML with embedded figure
+    """
+    # Extract just the SVG tag content (remove XML declaration if present)
+    svg_match = re.search(r'(<svg[^>]*>.*?</svg>)', svg_string, re.DOTALL)
+    if svg_match:
+        svg_content = svg_match.group(1)
+    else:
+        svg_content = svg_string
+    
+    # Build figure block
+    figure_html = f'<figure class="image">\n{svg_content}\n</figure>\n{long_description_html}'
+    
+    # Combine with paragraph
+    combined = f'<p>{paragraph_text}</p>\n\n{figure_html}'
+    
+    return combined
 
 
 def _build_generation_prompt(
@@ -408,6 +594,166 @@ Generate a completely new, high-quality SAT R&W question with table now."""
     return prompt
 
 
+def _build_grouped_bar_chart_generation_prompt(
+    paragraph: str,
+    graph_spec,  # GraphSpec with grouped_data
+    question: str,
+    choices: List[str],
+    correct_letter: str,
+    explanation: str,
+    skill: str,
+    category: str,
+    difficulty: str,
+) -> str:
+    """Build prompt for LLM to generate new R&W question with grouped bar chart."""
+    
+    reasoning_type = _infer_reasoning_type(skill, question, paragraph)
+    logical_schema = _infer_logical_schema(skill, paragraph, choices)
+    
+    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
+    
+    # Format graph structure for LLM
+    # Handle y_axis_range - it may be None if not specified in the graph
+    if graph_spec.y_axis_range:
+        y_axis_range_str = f"Y-axis Range: {graph_spec.y_axis_range[0]} to {graph_spec.y_axis_range[1]} (increments of {graph_spec.y_axis_range[2]})"
+    else:
+        y_axis_range_str = "Y-axis Range: Not specified (infer from data)"
+    
+    graph_structure = f"""**Original Grouped Bar Chart Structure:**
+
+Title: {graph_spec.title}
+Y-axis Label: {graph_spec.y_label}
+{y_axis_range_str}
+
+Groups: {graph_spec.groups}
+(These are the bars shown for each category)
+
+Categories: {graph_spec.categories}
+(These are shown on the X-axis)
+
+Data:
+"""
+    
+    for category in graph_spec.categories:
+        graph_structure += f"\n  {category}:\n"
+        if category in graph_spec.grouped_data:
+            for group, value in graph_spec.grouped_data[category].items():
+                graph_structure += f"    {group}: {value}\n"
+    
+    # Analyze data patterns
+    patterns = []
+    
+    # Check if groups have similar values across categories
+    if graph_spec.grouped_data:
+        first_category = graph_spec.categories[0]
+        if first_category in graph_spec.grouped_data:
+            group1_values = []
+            group2_values = []
+            
+            for cat in graph_spec.categories:
+                if cat in graph_spec.grouped_data:
+                    values = list(graph_spec.grouped_data[cat].values())
+                    if len(values) >= 2:
+                        group1_values.append(values[0])
+                        group2_values.append(values[1])
+            
+            if group1_values and group2_values:
+                avg_diff = sum(abs(v1 - v2) for v1, v2 in zip(group1_values, group2_values)) / len(group1_values)
+                if avg_diff < 50:  # Relatively small differences
+                    patterns.append("- Both groups show SIMILAR values across all categories (small differences)")
+                else:
+                    patterns.append("- Groups show DIFFERENT values across categories (one group consistently higher/lower)")
+    
+    patterns_text = "\n".join(patterns) if patterns else "- Analyze the original data pattern and preserve it"
+    
+    prompt = f"""You are an SAT Reading & Writing question designer.
+
+Your task: Generate a NEW scenario with a NEW GROUPED BAR CHART that tests the SAME reasoning skill.
+
+**Original Question Analysis:**
+
+Category: {category}
+Skill: {skill}
+Difficulty: {difficulty}
+Reasoning Type: {reasoning_type}
+Logical Schema: {logical_schema}
+
+{graph_structure}
+
+**Data Patterns to Preserve:**
+{patterns_text}
+
+**Original Paragraph (without graph):**
+{paragraph}
+
+**Original Question:**
+{question}
+
+**Original Choices:**
+{choices_text}
+
+**Correct Answer:** {correct_letter}. {correct_choice}
+
+**Original Explanation:**
+{explanation}
+
+---
+
+**YOUR TASK:**
+
+1. **Create a COMPLETELY NEW scenario** (different topic, different context):
+   - If original is about municipalities/politics, try: companies, schools, products, countries, etc.
+   - Change ALL specific details (names, context, study description)
+
+2. **Generate NEW GROUPED BAR CHART DATA**:
+   - Same structure: {len(graph_spec.groups)} groups, {len(graph_spec.categories)} categories
+   - New graph title (related to your new scenario)
+   - New Y-axis label (appropriate for your new data type)
+   - New group names (the two conditions/treatments in your scenario)
+   - New category names (the X-axis categories)
+   - New numerical data (realistic for your context)
+   - **PRESERVE THE DATA PATTERN**: If original groups have similar values, your groups should too!
+
+3. **Write NEW paragraph** describing the research/study scenario (WITHOUT the graph - graph will be shown separately):
+   - Describe the study setup
+   - Explain what the researchers measured
+   - State the hypothesis being tested
+   - Keep academic/research tone
+
+4. **Keep or adapt the question** (usually "Which choice best describes data from the graph that weaken/support the hypothesis?")
+
+5. **Create 4 answer choices** with SAME distractor logic:
+   - 1 correct choice that identifies the key pattern (e.g., "groups are similar" or "groups differ")
+   - 3 wrong choices with similar errors as original (mentions only one group, wrong comparison, irrelevant data, etc.)
+
+6. **Write explanation** of why correct answer works and why others don't
+
+**Important:**
+- DO NOT reuse the topic/field from original
+- Keep SAT academic/research tone
+- Data must be REALISTIC and follow the same pattern as original
+- Same difficulty level: {difficulty}
+- Graph data should make the same argumentative point (weaken/support hypothesis in same way)
+
+**Output JSON with these fields:**
+- paragraph_text: New paragraph WITHOUT graph
+- graph_title: New graph title
+- graph_y_label: Y-axis label  
+- graph_groups: List of {len(graph_spec.groups)} group names
+- graph_categories: List of {len(graph_spec.categories)} category names
+- graph_data_flat: List of {len(graph_spec.categories) * len(graph_spec.groups)} values (for each category, provide values for each group in order)
+  Example: If 3 categories and 2 groups, provide [cat1_group1, cat1_group2, cat2_group1, cat2_group2, cat3_group1, cat3_group2]
+- question: Question text
+- choices: Array of 4 answer choices
+- correct_answer_letter: "A", "B", "C", or "D"
+- explanation: Clear explanation
+
+Generate a completely new, high-quality SAT R&W question with grouped bar chart now."""
+
+    return prompt
+
+
 # ============================================================================
 # Main Generation Function
 # ============================================================================
@@ -561,66 +907,214 @@ def generate_new_rw_question(
         }
         
         return new_question
-    
-    # Handle graph case
-    if has_graph:
-        paragraph_for_prompt = _extract_paragraph_without_graph(paragraph)
-        if verbose:
-            print(f"[generate_rw_question] Extracted paragraph without graph: {len(paragraph_for_prompt)} chars")
+    # Handle graph case - check if it's a grouped bar chart first
+    elif has_graph:
+        # Parse graph to see if it's a grouped bar chart
+        parser = MathMLParser()
+        parsed = parser.parse_paragraph(paragraph)
+        
+        if parsed.get("has_graph") and parsed.get("graph"):
+            graph_spec = parsed["graph"]
+            
+            # Check if this is a grouped bar chart
+            if graph_spec.graph_type == "grouped_bar" and graph_spec.grouped_data:
+                paragraph_for_prompt = parsed["text"]
+                
+                if verbose:
+                    print(f"[generate_rw_question] Detected grouped bar chart: {graph_spec.title}")
+                    print(f"  Groups: {len(graph_spec.groups or [])} | Categories: {len(graph_spec.categories or [])}")
+                    print(f"  Y-axis: {graph_spec.y_label} ({graph_spec.y_axis_range})")
+                    print(f"  Paragraph without graph: {len(paragraph_for_prompt)} chars")
+                
+                # Build grouped bar chart generation prompt
+                prompt = _build_grouped_bar_chart_generation_prompt(
+                    paragraph=paragraph_for_prompt,
+                    graph_spec=graph_spec,
+                    question=question_text,
+                    choices=choices,
+                    correct_letter=correct_letter,
+                    explanation=explanation,
+                    skill=skill,
+                    category=category,
+                    difficulty=difficulty,
+                )
+                
+                # Use grouped bar chart specific schema
+                llm_with_structure = llm.with_structured_output(GeneratedRWQuestionWithGroupedBarChart)
+                if verbose:
+                    print(f"[generate_rw_question] Calling LLM for grouped bar chart generation... (prompt length: {len(prompt)} chars)")
+                
+                try:
+                    generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
+                    
+                    if verbose:
+                        print("[generate_rw_question] LLM grouped bar chart generation completed successfully")
+                        print(f"  New graph title: {generated.graph_title}")
+                except Exception as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Error during LLM generation: {e}")
+                    raise
+                
+                # Convert flattened data back to nested dict structure
+                # graph_data_flat is: [cat1_grp1, cat1_grp2, cat2_grp1, cat2_grp2, ...]
+                graph_data = {}
+                num_groups = len(generated.graph_groups)
+                data_idx = 0
+                
+                for category in generated.graph_categories:
+                    graph_data[category] = {}
+                    for i, group in enumerate(generated.graph_groups):
+                        if data_idx < len(generated.graph_data_flat):
+                            graph_data[category][group] = generated.graph_data_flat[data_idx]
+                            data_idx += 1
+                
+                if verbose:
+                    print(f"[generate_rw_question] Converted flattened data to nested structure")
+                    print(f"  Categories: {len(graph_data)}, Data points: {sum(len(v) for v in graph_data.values())}")
+                
+                # Generate SVG graph using matplotlib
+                if verbose:
+                    print(f"[generate_rw_question] Generating grouped bar chart SVG...")
+                
+                try:
+                    # Infer y-axis range from data if not provided
+                    if graph_spec.y_axis_range:
+                        y_range = graph_spec.y_axis_range
+                    else:
+                        # Auto-calculate range from new data
+                        all_values = [v for cat_data in graph_data.values() for v in cat_data.values()]
+                        max_val = max(all_values) if all_values else 100
+                        y_max = int(max_val * 1.2)  # Add 20% padding
+                        y_inc = 100 if y_max > 500 else 50 if y_max > 200 else 10
+                        y_range = (0, y_max, y_inc)
+                    
+                    svg_string = _generate_grouped_bar_chart_svg(
+                        title=generated.graph_title,
+                        y_label=generated.graph_y_label,
+                        groups=generated.graph_groups,
+                        categories=generated.graph_categories,
+                        data=graph_data,
+                        y_range=y_range,
+                    )
+                    
+                    if verbose:
+                        print(f"[generate_rw_question] SVG generated ({len(svg_string)} chars)")
+                except Exception as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Warning: SVG generation failed: {e}")
+                        print(f"[generate_rw_question] Falling back to text description")
+                    svg_string = None
+                
+                # Build long description HTML (sr-only div)
+                long_desc_html = _build_long_description_html(
+                    title=generated.graph_title,
+                    groups=generated.graph_groups,
+                    categories=generated.graph_categories,
+                    data=graph_data,
+                )
+                
+                if verbose:
+                    print(f"[generate_rw_question] Built long description HTML ({len(long_desc_html)} chars)")
+                
+                # Build complete paragraph with figure block
+                if svg_string:
+                    final_paragraph = _build_figure_block_with_graph(
+                        svg_string=svg_string,
+                        long_description_html=long_desc_html,
+                        paragraph_text=generated.paragraph_text,
+                    )
+                    if verbose:
+                        print(f"[generate_rw_question] Built complete figure block with SVG")
+                else:
+                    # Fallback: text description only
+                    graph_data_description = f"\n\n[Graph showing: {generated.graph_title}. Y-axis: {generated.graph_y_label}. Data comparison between {' and '.join(generated.graph_groups)} across {len(generated.graph_categories)} categories.]\n\n"
+                    final_paragraph = generated.paragraph_text + graph_data_description + "\n\n" + long_desc_html
+                    if verbose:
+                        print(f"[generate_rw_question] Using fallback text description")
+                # Build new question
+                new_question = {
+                    "id": str(uuid.uuid4()),
+                    "subject": sample.get("subject", "SAT"),
+                    "pool": sample.get("pool", "generated"),
+                    "section": section,
+                    "category": category,
+                    "skill": skill,
+                    "difficulty": difficulty,
+                    "type": "multiple-choice",
+                    "question": {
+                        "paragraph": final_paragraph,
+                        "question": generated.question,
+                        "choices": generated.choices,
+                        "correct_answer": [generated.correct_answer_letter],
+                        "explanation": generated.explanation,
+                    },
+                    "image_url": None,
+                    # Store graph data for potential future SVG generation
+                    "graph_data": {
+                        "type": "grouped_bar",
+                        "title": generated.graph_title,
+                        "y_label": generated.graph_y_label,
+                        "groups": generated.graph_groups,
+                        "categories": generated.graph_categories,
+                        "data": graph_data,  # Use the converted dict
+                    }
+                }
+                
+                return new_question
     else:
-        paragraph_for_prompt = paragraph
+      paragraph_for_prompt = paragraph
     
-    # Build generation prompt
-    if verbose:
-        print("[generate_rw_question] Building generation prompt...")
-    
-    prompt = _build_generation_prompt(
-        paragraph=paragraph_for_prompt,
-        question=question_text,
-        choices=choices,
-        correct_letter=correct_letter,
-        explanation=explanation,
-        skill=skill,
-        category=category,
-        difficulty=difficulty,
-        has_graph=has_graph,
-    )
-    
-    # Call LLM with structured output
-    if verbose:
-        print(f"[generate_rw_question] Calling LLM for generation... (prompt length: {len(prompt)} chars)")
-    
-    llm_with_structure = llm.with_structured_output(GeneratedRWQuestionContent)
-    
-    try:
-        generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
-        if verbose:
-            print("[generate_rw_question] LLM generation completed successfully")
-    except Exception as e:
-        if verbose:
-            print(f"[generate_rw_question] Error during LLM generation: {e}")
-        print(f"Error generating question: {e}")
-        raise
-    
-    # Build new question in same format as sample
-    new_question = {
-        "id": str(uuid.uuid4()),
-        "subject": sample.get("subject", "SAT"),
-        "pool": sample.get("pool", "generated"),
-        "section": section,
-        "category": category,
-        "skill": skill,
-        "difficulty": difficulty,
-        "type": "multiple-choice",
-        "question": {
-            "paragraph": generated.paragraph_text,
-            "question": generated.question,
-            "choices": generated.choices,
-            "correct_answer": [generated.correct_answer_letter],
-            "explanation": generated.explanation,
-        },
-        "image_url": None,
-    }
+      # Build generation prompt
+      if verbose:
+          print("[generate_rw_question] Building generation prompt...")
+      
+      prompt = _build_generation_prompt(
+          paragraph=paragraph_for_prompt,
+          question=question_text,
+          choices=choices,
+          correct_letter=correct_letter,
+          explanation=explanation,
+          skill=skill,
+          category=category,
+          difficulty=difficulty,
+          has_graph=has_graph,
+      )
+      
+      # Call LLM with structured output
+      if verbose:
+          print(f"[generate_rw_question] Calling LLM for generation... (prompt length: {len(prompt)} chars)")
+      
+      llm_with_structure = llm.with_structured_output(GeneratedRWQuestionContent)
+      
+      try:
+          generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
+          if verbose:
+              print("[generate_rw_question] LLM generation completed successfully")
+      except Exception as e:
+          if verbose:
+              print(f"[generate_rw_question] Error during LLM generation: {e}")
+          print(f"Error generating question: {e}")
+          raise
+      
+      # Build new question in same format as sample
+      new_question = {
+          "id": str(uuid.uuid4()),
+          "subject": sample.get("subject", "SAT"),
+          "pool": sample.get("pool", "generated"),
+          "section": section,
+          "category": category,
+          "skill": skill,
+          "difficulty": difficulty,
+          "type": "multiple-choice",
+          "question": {
+              "paragraph": generated.paragraph_text,
+              "question": generated.question,
+              "choices": generated.choices,
+              "correct_answer": [generated.correct_answer_letter],
+              "explanation": generated.explanation,
+          },
+          "image_url": None,
+      }
     
     return new_question
 
@@ -685,7 +1179,7 @@ def main():
     sample = load_sample_question(
         questions_path=args.questions_path,
         index=args.sample_index,
-        question_id=args.question_id,
+        question_id="0a2b60f3-73a9-48bf-8ed8-02ca96d39cb4",
         skill=args.skill,
     )
     

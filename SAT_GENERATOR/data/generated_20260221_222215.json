@@ -1,0 +1,25 @@
+{
+  "category": "Information and Ideas",
+  "difficulty": "Hard",
+  "id": "d855f750-678c-43fb-9d18-a1a460102c40",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "A. the varying socioeconomic conditions that exist across different neighborhoods, which can overshadow the benefits of green spaces.",
+      "B. the number of parks available in each neighborhood, which directly affects residents' socialization levels.",
+      "C. the general trend that neighborhoods with more green spaces tend to have lower crime rates, enhancing community safety.",
+      "D. the assumption that green spaces alone can solve all urban mental health issues without considering other contributing factors."
+    ],
+    "correct_answer": [
+      "D"
+    ],
+    "explanation": "Choice D is the best answer because it aligns with the paragraph's claim about the complexity of the relationship between urban green spaces and residents' mental health. The text emphasizes that while green spaces are beneficial, their impact is not straightforward and is influenced by other factors, which is echoed in the statement that increasing green space may not address all mental health challenges. \n\nChoice A, while it mentions socioeconomic conditions, does not directly illustrate the claim regarding the complexity of the green space-mental health relationship and focuses too narrowly on one aspect. Choice B inaccurately assumes a direct correlation between the number of parks and socialization levels without addressing the broader context provided in the paragraph. Choice C introduces an unrelated idea about crime rates, which is not discussed in the paragraph and thus fails to support the complexity of the mental health relationship.",
+    "paragraph": "Recent studies in environmental sociology have highlighted the impact of urban green spaces on community well-being. Researchers have examined various cities to assess how the availability of parks and gardens correlates with residents' mental health and social interactions. One significant finding is that neighborhoods with abundant green spaces tend to report higher levels of community engagement and lower instances of mental health issues. In a major city survey conducted in 2022, data revealed that areas with at least 20% of their land designated as parks had a 30% lower rate of reported anxiety among residents compared to those with less than 5% green space. This suggests that the presence of nature in urban settings can play a crucial role in enhancing the quality of life. However, the correlation between green space and mental health is not universally applicable; for instance, some densely populated urban areas with substantial parks still experience high levels of psychological distress. Therefore, while green spaces generally contribute positively to urban living, other factors may also significantly influence residents' mental health, indicating that simply increasing green space may not be a comprehensive solution to urban mental health challenges.  \n\nThis disparity leads to the assertion that the relationship between urban green space and mental health is often complicated by __________.",
+    "question": "Which choice most effectively uses data from the paragraph to illustrate the claim?"
+  },
+  "section": "Reading and Writing",
+  "skill": "Command of Evidence",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

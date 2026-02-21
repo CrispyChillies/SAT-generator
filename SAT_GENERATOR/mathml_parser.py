@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 
 @dataclass
 class GraphSpec:
-    graph_type: str  # "line" | "bar" | "scatter" ...
+    graph_type: str  # "line" | "bar" | "grouped_bar" | "scatter" ...
     x_label: Optional[str] = None
     y_label: Optional[str] = None
     x_values: Optional[List[Any]] = None
@@ -14,6 +14,13 @@ class GraphSpec:
     y_unit: Optional[str] = None
     raw_long_description: Optional[str] = None  # Plain text version
     long_description_html: Optional[str] = None  # HTML structure preserved
+    
+    # Grouped bar chart specific fields
+    title: Optional[str] = None  # Graph title
+    groups: Optional[List[str]] = None  # Group names (e.g., ["before election", "after election"])
+    categories: Optional[List[str]] = None  # Category names (e.g., ["no response", "responded to inquiry"])
+    grouped_data: Optional[Dict[str, Dict[str, float]]] = None  # {category: {group: value}}
+    y_axis_range: Optional[tuple] = None  # (min, max, increment) e.g., (0, 1300, 100)
 
 
 @dataclass
@@ -390,9 +397,171 @@ class MathMLParser:
             'aria_label': aria_label
         } if (html_content or text) else None
 
+    def _parse_single_bar_chart_html(self, html: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse single (non-grouped) bar chart from HTML list structure.
+        
+        Pattern:
+        <ul>
+          <li>The data for the N categories are as follows:
+            <ul>
+              <li>category1: value1</li>
+              <li>category2: value2</li>
+              ...
+            </ul>
+          </li>
+        </ul>
+        
+        Key difference from grouped: values are DIRECTLY after colon, no nested <ul>
+        
+        Returns:
+            Dict with 'categories' and 'values' keys or None
+        """
+        # Check if this looks like bar chart data
+        if "data for the" not in html.lower() or "categories are as follows" not in html.lower():
+            return None
+        
+        # If this has "for each data category" and "following bars are shown", it's grouped
+        if "for each data category" in html.lower() and "following bars are shown" in html.lower():
+            return None
+        
+        # Extract data section after "data for the N categories are as follows"
+        data_match = re.search(
+            r'data for the \d+ categories are as follows:.*?<br\s*/?>?\s*<ul>(.*?)</ul>',
+            html,
+            re.DOTALL | re.IGNORECASE
+        )
+        if not data_match:
+            return None
+        
+        data_section = data_match.group(1)
+        
+        # Key check: If data_section contains nested <ul> tags, it's a grouped bar chart
+        # We're looking for direct <li>CATEGORY: VALUE</li>, not <li>CATEGORY:<ul>...</ul></li>
+        if re.search(r'<li>[^<]*:<\s*ul\s*>', data_section, re.IGNORECASE):
+            return None
+        
+        # Extract category:value pairs where value is directly after colon
+        # Pattern: <li>CATEGORY_NAME: NUMBER</li> (no nested tags)
+        
+        categories = []
+        values = []
+        
+        # Find all <li>TEXT</li> items where TEXT contains CATEGORY: NUMBER
+        # and TEXT does NOT contain nested tags or <ul>
+        li_pattern = r'<li>([^<]+)</li>'
+        li_items = re.findall(li_pattern, data_section, re.IGNORECASE)
+        
+        for item_text in li_items:
+            # Check if this item matches CATEGORY: NUMBER pattern
+            # The key is that NUMBER is directly after colon (not nested in another tag)
+            match = re.match(r'^([^:]+):\s*([0-9,]+)\s*$', item_text.strip())
+            if match:
+                category = match.group(1).strip()
+                value_str = match.group(2).strip()
+                # Remove commas from numbers (e.g., "1,252" -> 1252)
+                value = float(value_str.replace(',', ''))
+                categories.append(category)
+                values.append(value)
+        
+        if not categories:
+            return None
+        
+        return {
+            'categories': categories,
+            'values': values
+        }
+
+    def _parse_grouped_bar_chart_html(self, html: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse grouped bar chart from nested HTML list structure.
+        
+        Pattern:
+        <ul>
+          <li>For each data category, the following bars are shown:
+            <ul>
+              <li>group1</li>
+              <li>group2</li>
+            </ul>
+          </li>
+          <li>The data for the N categories are as follows:
+            <ul>
+              <li>category1:
+                <ul>
+                  <li>group1: value1</li>
+                  <li>group2: value2</li>
+                </ul>
+              </li>
+              ...
+            </ul>
+          </li>
+        </ul>
+        
+        Key difference from single: values are NESTED in <ul> after category name
+        
+        Returns:
+            Dict with 'groups', 'categories', 'data' keys or None
+        """
+        # Check if this is a grouped bar chart
+        if "for each data category" not in html.lower() or "following bars are shown" not in html.lower():
+            return None
+        
+        # Extract groups from first section
+        groups = []
+        groups_match = re.search(r'following bars are shown:.*?<ul>(.*?)</ul>', html, re.DOTALL | re.IGNORECASE)
+        if groups_match:
+            group_items = re.findall(r'<li>([^<]+)</li>', groups_match.group(1))
+            groups = [g.strip() for g in group_items if g.strip()]
+        
+        if not groups:
+            return None
+        
+        # Extract categories and data from second section
+        categories = []
+        grouped_data = {}
+        
+        # Find the data section - more flexible pattern
+        # Match from "data for the N categories" to the end of the outer ul
+        # Make <br> tag optional (some HTML has newline/whitespace instead)
+        data_match = re.search(r'data for the \d+ categories are as follows:\s*(?:<br\s*/?>)?\s*<ul>(.*)', html, re.DOTALL | re.IGNORECASE)
+        if not data_match:
+            return None
+        
+        data_section = data_match.group(1)
+        
+        # Extract each category block - match category name followed by nested ul with data
+        category_pattern = r'<li>\s*([^:<]+)\s*:\s*<ul>(.*?)</ul>\s*</li>'
+        category_matches = re.findall(category_pattern, data_section, re.DOTALL | re.IGNORECASE)
+        
+        for category_name, category_data in category_matches:
+            category_name = category_name.strip()
+            categories.append(category_name)
+            
+            # Extract group:value pairs within this category
+            value_pattern = r'<li>([^:]+):\s*([0-9,]+)</li>'
+            value_matches = re.findall(value_pattern, category_data, re.IGNORECASE)
+            
+            group_values = {}
+            for group_name, value_str in value_matches:
+                group_name = group_name.strip()
+                # Remove commas from numbers (e.g., "1,252" -> 1252)
+                value = float(value_str.replace(',', ''))
+                group_values[group_name] = value
+            
+            grouped_data[category_name] = group_values
+        
+        if not categories or not grouped_data:
+            return None
+        
+        return {
+            'groups': groups,
+            'categories': categories,
+            'data': grouped_data
+        }
+
     def _long_desc_to_graphspec(self, long_desc_result: Dict[str, str], full_html: str = "") -> Optional[GraphSpec]:
         """
-        Convert SAT long description to GraphSpec (supports line graph, bar graph, scatter plot).
+        Convert SAT long description to GraphSpec (supports line graph, bar graph, grouped bar, scatter plot).
         
         Args:
             long_desc_result: Dict with 'html', 'text', and 'aria_label' keys
@@ -405,6 +574,29 @@ class MathMLParser:
         long_desc_html = long_desc_result.get('html', '')
         aria_label = long_desc_result.get('aria_label', '').lower()
 
+        # Extract title from aria-label (e.g., "Long description for bar graph titled XYZ")
+        title = None
+        title_match = re.search(r'titled\s+([^"]+)$', aria_label, re.IGNORECASE)
+        if title_match:
+            title = title_match.group(1).strip()
+        
+        # Extract y-axis label and range from aria-label if available
+        y_label = None
+        y_axis_range = None
+        
+        # Pattern: "The vertical axis is labeled XYZ. It ranges from A to B in increments of C"
+        if full_html:
+            y_label_match = re.search(r'vertical axis is labeled ([^.]+)', full_html, re.IGNORECASE)
+            if y_label_match:
+                y_label = y_label_match.group(1).strip()
+            
+            y_range_match = re.search(r'ranges from ([0-9,]+) to ([0-9,]+) in increments of ([0-9,]+)', full_html, re.IGNORECASE)
+            if y_range_match:
+                y_min = float(y_range_match.group(1).replace(',', ''))
+                y_max = float(y_range_match.group(2).replace(',', ''))
+                y_inc = float(y_range_match.group(3).replace(',', ''))
+                y_axis_range = (y_min, y_max, y_inc)
+
         # detect graph type from aria-label first, fallback to content
         graph_type = "unknown"
         if "line graph" in aria_label or "line graph" in long_desc_text.lower():
@@ -414,12 +606,42 @@ class MathMLParser:
         elif "scatter plot" in aria_label or "scatter plot" in long_desc_text.lower() or "scatterplot" in long_desc_text.lower():
             graph_type = "scatter"
 
+        # Pattern 4: Grouped bar chart (check FIRST before other patterns)
+        if graph_type == "bar":
+            grouped_result = self._parse_grouped_bar_chart_html(long_desc_html)
+            if grouped_result:
+                return GraphSpec(
+                    graph_type="grouped_bar",
+                    title=title,
+                    y_label=y_label,
+                    y_axis_range=y_axis_range,
+                    groups=grouped_result['groups'],
+                    categories=grouped_result['categories'],
+                    grouped_data=grouped_result['data'],
+                    raw_long_description=long_desc_text,
+                    long_description_html=long_desc_html
+                )
+            
+            # Pattern 5: Single bar chart (if not grouped)
+            single_bar_result = self._parse_single_bar_chart_html(long_desc_html)
+            if single_bar_result:
+                return GraphSpec(
+                    graph_type="bar",
+                    title=title,
+                    y_label=y_label,
+                    y_axis_range=y_axis_range,
+                    x_values=single_bar_result['categories'],  # Category names on X-axis
+                    y_values=single_bar_result['values'],      # Values on Y-axis
+                    x_label="Category",
+                    raw_long_description=long_desc_text,
+                    long_description_html=long_desc_html
+                )
+
         # Try multiple patterns to extract data
         pairs = None
         x_vals = None
         y_vals = None
         x_label = None
-        y_label = None
         y_unit = None
         
         # Pattern 1: "(X comma Y)" format (scatter plot format)
@@ -460,36 +682,16 @@ class MathMLParser:
                 y_label = "y"
                 y_unit = None
         else:
-            # Pattern 2: "Group X: Y" format (bar graph format)
-            group_pairs = re.findall(r'Group\s+(\d+)\s*:\s*(\d+(?:\.\d+)?)', long_desc_text, re.IGNORECASE)
+            # Pattern 2: "Year, percentage" format (line graph format)
+            year_pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
             
-            if group_pairs:
-                x_vals = [f"Group {x}" for x, _ in group_pairs]
-                y_vals = [float(y) for _, y in group_pairs]
-                x_label = "Group"
-                
-                # Detect Y label and unit from context
-                lower_text = long_desc_text.lower()
-                if "books" in lower_text:
-                    y_label = "Number of books"
-                    y_unit = "books"
-                elif "number" in lower_text:
-                    y_label = "Number"
-                    y_unit = None
-                else:
-                    y_label = "Value"
-                    y_unit = None
-            else:
-                # Pattern 3: "Year, percentage" format (line graph format)
-                year_pairs = re.findall(r'(\d{4})\s*,\s*(\d+(?:\.\d+)?)\s*%?', long_desc_text)
-                
-                if year_pairs:
-                    x_vals = [int(x) for x, _ in year_pairs]
-                    y_vals = [float(y) for _, y in year_pairs]
-                    # heuristic axis labels (SAT dataset style)
-                    x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else "Year"
-                    y_label = "Percent" if "%" in long_desc_text else None
-                    y_unit = "%" if "%" in long_desc_text else None
+            if year_pairs:
+                x_vals = [int(x) for x, _ in year_pairs]
+                y_vals = [float(y) for _, y in year_pairs]
+                # heuristic axis labels (SAT dataset style)
+                x_label = "Model year" if any(2000 <= x <= 2100 for x in x_vals) else "Year"
+                y_label = "Percent" if "%" in long_desc_text else None
+                y_unit = "%" if "%" in long_desc_text else None
 
         # If no patterns matched, return basic GraphSpec with just the description
         if x_vals is None or y_vals is None:

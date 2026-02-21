@@ -196,13 +196,17 @@ Question:
 Answer Choices:
 {choices_text}
 
-Analyze each choice and:
-1. Identify the BEST answer (A, B, C, or D)
-2. Explain why it's correct
-3. Explain why each other choice is wrong (partially correct, flawed, or irrelevant)
-4. Rank all choices from best to worst
+Analyze each choice systematically and determine the best answer.
 
-Provide systematic reasoning."""
+IMPORTANT: You MUST end your response with EXACTLY this format on the last line:
+ANSWER: [letter]
+
+Where [letter] is A, B, C, or D.
+
+Example ending:
+Therefore, choice D is correct because it accurately reflects the data.
+
+ANSWER: D"""
     
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content.strip()

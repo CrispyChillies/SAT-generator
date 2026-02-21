@@ -1,0 +1,25 @@
+{
+  "category": "Information and Ideas",
+  "difficulty": "Hard",
+  "id": "f802d842-80bc-4104-884a-260842e36d7a",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "A. was significantly higher in neighborhoods with more than 20% green space compared to those with less than 5%.",
+      "B. was consistent across all neighborhoods regardless of the percentage of green space available.",
+      "C. had a negligible effect on community engagement in areas with less than 5% green space.",
+      "D. remained unchanged in communities that lacked any green space entirely during the study period."
+    ],
+    "correct_answer": [
+      "A"
+    ],
+    "explanation": "Choice A is the correct answer because it directly reflects the data presented in Dr. Chen's study, indicating that neighborhoods with at least 20% green space had better health outcomes and community engagement than those with less than 5%. This supports the claim that access to green space is crucial for community health. \n\nChoice B is incorrect because the study highlights that access to green space is not consistent across neighborhoods; it varies significantly and thus does not support the claim. \n\nChoice C misinterprets the findings; the study shows that neighborhoods with less green space had poorer health outcomes, not that access had a negligible effect. \n\nChoice D is irrelevant because it suggests a lack of change in communities without green space, which does not relate to the study’s focus on the impact of varying levels of green space on health and engagement.",
+    "paragraph": "In recent years, researchers have examined the impact of urban green spaces on community health and social cohesion. Dr. Maria Chen conducted a study analyzing data from various cities, measuring the amount of green space available per capita and its correlation with reported health outcomes and community engagement. Her findings suggest that while the overall amount of green space in a city may be high, access to these areas can vary greatly among different neighborhoods. For instance, neighborhoods with at least 20% green space reported lower levels of obesity and higher rates of community events compared to those with less than 5% green space. The study emphasizes that simply increasing green space does not guarantee improved health outcomes; rather, equitable access to these spaces is crucial for fostering healthier communities. One significant observation is that access to urban green space <span aria-hidden=\"true\">______</span>",
+    "question": "Which choice most effectively uses data from Dr. Chen's study to illustrate this claim?"
+  },
+  "section": "Reading and Writing",
+  "skill": "Command of Evidence",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

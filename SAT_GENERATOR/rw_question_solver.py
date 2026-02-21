@@ -7,6 +7,7 @@ import os
 import re
 import json
 from pathlib import Path
+import string
 from typing import Dict, Any, List, Optional, Tuple
 
 from langchain_openai import ChatOpenAI
@@ -14,12 +15,12 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from dotenv import load_dotenv
 
 from rw_reasoning_tools import rw_reasoning_tools, get_rw_tool_by_name
+from mathml_parser import MathMLParser
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("Set OPENAI_API_KEY in environment")
-
 
 def solve_rw_question(
     paragraph: str,
@@ -263,6 +264,9 @@ def solve_rw_question_simple(
         - explanation: Full explanation
         - error: Error message if any
     """
+    parser = MathMLParser()
+    parsed_paragraph = parser.parse_paragraph(paragraph)
+    
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     
@@ -272,11 +276,15 @@ def solve_rw_question_simple(
     tool = get_rw_tool_by_name("compare_choices")
     
     if verbose:
-        print("Using compare_choices tool to analyze all options...")
-    
+        print("Using compare_choices tool to analyze all options...")    
     try:
+        paragraph_content = parsed_paragraph['text']
+        if parsed_paragraph['has_graph']:
+            graph = parsed_paragraph['graph']
+            paragraph_content = f"{paragraph_content}\n\nGraph: {graph.raw_long_description}"
+        print(paragraph_content)
         result = tool.invoke({
-            "paragraph": paragraph,
+            "paragraph": paragraph_content,
             "question": question,
             "choices": choices,
             "skill": skill or "General Reading",
@@ -287,24 +295,28 @@ def solve_rw_question_simple(
         
         # Extract answer letter from result
         final_answer_letter = None
-        result_lower = result.lower()
         
         # Check for explicit best answer statements (most reliable)
         import re
         
-        # Try various patterns (more flexible regex)
-        patterns = [
-            r'(?:best|correct)\s+answer[:\s]+(?:is\s+)?\*?\*?([A-D])\*?\*?',  # "best answer: B" or "best answer is **B**"
-            r'(?:the\s+)?answer[:\s]+(?:is\s+)?\*?\*?([A-D])\*?\*?',  # "answer: B" or "the answer is B"
-            r'select\s+(?:choice\s+)?\*?\*?([A-D])\*?\*?',  # "select B" or "select choice B"
-            r'\*?\*?([A-D])\*?\*?\s+is\s+(?:the\s+)?(?:best|correct)',  # "**B** is the best"
-        ]
+        # STRATEGY 1: Look for "ANSWER: X" format (standardized output from compare_choices)
+        # This should appear at the END of the response
+        answer_match = re.search(r'^ANSWER:\s*([A-D])\s*$', result, re.MULTILINE | re.IGNORECASE)
+        if answer_match:
+            final_answer_letter = answer_match.group(1).upper()
         
-        for pattern in patterns:
-            match = re.search(pattern, result, re.IGNORECASE)
-            if match:
-                final_answer_letter = match.group(1).upper()
-                break
+        # STRATEGY 2: Fallback - extract from conclusion section
+        if not final_answer_letter:
+            conclusion_patterns = [
+                r'(?:best answer|final answer)[:\s]+(?:is\s+)?\*?\*?([A-D])\*?\*?',
+                r'ranking.*?best\s+to\s+worst.*?([A-D])',
+            ]
+            
+            for pattern in conclusion_patterns:
+                match = re.search(pattern, result, re.IGNORECASE)
+                if match:
+                    final_answer_letter = match.group(1).upper()
+                    break
         
         # Extract the actual choice text for final_result
         final_result = None
