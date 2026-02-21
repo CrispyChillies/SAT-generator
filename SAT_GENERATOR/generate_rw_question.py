@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
+from mathml_parser import MathMLParser, TableSpec
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -60,6 +61,26 @@ class GeneratedRWQuestionWithGraph(BaseModel):
         return v
 
 
+class GeneratedRWQuestionWithTable(BaseModel):
+    """Generated R&W question with HTML table (new scenario with new data)."""
+    paragraph_text: str = Field(description="New paragraph text WITHOUT the table (describes new scenario)")
+    table_caption: str = Field(description="New table caption/title")
+    table_headers: List[str] = Field(description="Column headers (same number as original)")
+    table_row_labels: List[str] = Field(description="Row labels (same number as original)")
+    table_data: List[List[str]] = Field(description="Table data cells (same structure as original)")
+    question: str = Field(description="New question text (usually same as original)")
+    choices: List[str] = Field(description="Exactly 4 answer choices")
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="Letter of the correct answer")
+    explanation: str = Field(description="Explanation of the correct answer")
+    
+    @field_validator("choices")
+    @classmethod
+    def validate_choices(cls, v):
+        if len(v) != 4:
+            raise ValueError("Must have exactly 4 choices")
+        return v
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -68,7 +89,14 @@ def _has_embedded_graph(paragraph: str) -> bool:
     """Check if paragraph contains embedded SVG or figure."""
     if not paragraph:
         return False
-    return "<svg" in paragraph.lower() or "<figure" in paragraph.lower()
+    return "<svg" in paragraph.lower() or ("<figure" in paragraph.lower() and "<svg" in paragraph.lower())
+
+
+def _has_embedded_table(paragraph: str) -> bool:
+    """Check if paragraph contains embedded HTML table."""
+    if not paragraph:
+        return False
+    return "<table" in paragraph.lower()
 
 
 def _extract_paragraph_without_graph(paragraph: str) -> str:
@@ -271,6 +299,115 @@ Generate a completely new, high-quality SAT R&W question now."""
     return prompt
 
 
+def _build_table_generation_prompt(
+    paragraph: str,
+    table_spec: TableSpec,
+    question: str,
+    choices: List[str],
+    correct_letter: str,
+    explanation: str,
+    skill: str,
+    category: str,
+    difficulty: str,
+) -> str:
+    """Build prompt for LLM to generate new R&W question with table."""
+    
+    reasoning_type = _infer_reasoning_type(skill, question, paragraph)
+    logical_schema = _infer_logical_schema(skill, paragraph, choices)
+    
+    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
+    
+    # Format table structure for LLM
+    table_structure = f"""**Original Table Structure:**
+Caption: {table_spec.caption}
+
+Headers: {table_spec.headers}
+
+Row Labels: {table_spec.row_labels}
+
+Data (rows):
+"""
+    for i, row in enumerate(table_spec.rows or []):
+        label = table_spec.row_labels[i] if table_spec.row_labels and i < len(table_spec.row_labels) else f"Row {i+1}"
+        table_structure += f"  {label}: {row}\n"
+    
+    prompt = f"""You are an SAT Reading & Writing question designer.
+
+Your task: Generate a NEW scenario with a NEW DATA TABLE that tests the SAME reasoning skill.
+
+**Original Question Analysis:**
+
+Category: {category}
+Skill: {skill}
+Difficulty: {difficulty}
+Reasoning Type: {reasoning_type}
+Logical Schema: {logical_schema}
+
+{table_structure}
+
+**Original Paragraph (without table):**
+{paragraph}
+
+**Original Question:**
+{question}
+
+**Original Choices:**
+{choices_text}
+
+**Correct Answer:** {correct_letter}. {correct_choice}
+
+**Original Explanation:**
+{explanation}
+
+---
+
+**YOUR TASK:**
+
+1. **Create a COMPLETELY NEW scenario** (different topic, different context):
+   - If original is about museums, try: products, cities, schools, books, etc.
+   - Change ALL specific details (names, numbers, categories)
+
+2. **Generate NEW TABLE DATA**:
+   - Same structure: {len(table_spec.headers or [])} columns, {len(table_spec.rows or [])} rows
+   - New caption (related to your new scenario)
+   - New column headers (appropriate for new scenario)
+   - New row labels (items/entities in your scenario)
+   - New numerical data (realistic for your context)
+   - Data should have similar patterns (e.g., if original shows top item has highest value, new data should too)
+
+3. **Write NEW paragraph** describing the scenario (WITHOUT the table - table will be added separately)
+
+4. **Keep or adapt the question** (usually "Which choice best describes data in the table that support the researchers' conclusion?")
+
+5. **Create 4 answer choices** with SAME distractor logic:
+   - 1 correct choice that identifies the key data pattern
+   - 3 wrong choices with similar errors as original (wrong data, wrong comparison, wrong group, etc.)
+
+6. **Write explanation** of why correct answer works and why others don't
+
+**Important:**
+- DO NOT reuse the topic/field from original
+- Keep SAT academic tone
+- Table data must be REALISTIC and LOGICAL for your new scenario
+- Same difficulty level: {difficulty}
+
+**Output JSON with these fields:**
+- paragraph_text: New paragraph WITHOUT table
+- table_caption: New caption
+- table_headers: List of {len(table_spec.headers or [])} column headers
+- table_row_labels: List of {len(table_spec.rows or [])} row labels
+- table_data: List of {len(table_spec.rows or [])} data rows (each row has {len(table_spec.rows[0])} values)
+- question: Question text
+- choices: Array of 4 answer choices
+- correct_answer_letter: "A", "B", "C", or "D"
+- explanation: Clear explanation
+
+Generate a completely new, high-quality SAT R&W question with table now."""
+
+    return prompt
+
+
 # ============================================================================
 # Main Generation Function
 # ============================================================================
@@ -331,14 +468,102 @@ def generate_new_rw_question(
     if not paragraph or not question_text or not choices:
         raise ValueError("Sample question missing required fields (paragraph, question, or choices)")
     
-    # Check for embedded graph
-    has_graph = _has_embedded_graph(paragraph)
+    # Check for embedded table (higher priority than graph)
+    has_table = _has_embedded_table(paragraph)
+    has_graph = _has_embedded_graph(paragraph) if not has_table else False
     
     if verbose:
+        print(f"[generate_rw_question] Has embedded table: {has_table}")
         print(f"[generate_rw_question] Has embedded graph: {has_graph}")
     
+    # Handle table case
+    if has_table:
+        # Parse table structure
+        parser = MathMLParser()
+        parsed = parser.parse_paragraph(paragraph)
+        
+        if not parsed.get("has_table"):
+            raise ValueError("Table detection mismatch - expected table but parser didn't find it")
+        
+        table_spec = parsed["table"]
+        paragraph_for_prompt = parsed["text"]
+        
+        if verbose:
+            print(f"[generate_rw_question] Parsed table: {table_spec.caption}")
+            print(f"  Headers: {len(table_spec.headers or [])}, Rows: {len(table_spec.rows or [])}")
+            print(f"  Paragraph without table: {len(paragraph_for_prompt)} chars")
+        
+        # Build table generation prompt
+        prompt = _build_table_generation_prompt(
+            paragraph=paragraph_for_prompt,
+            table_spec=table_spec,
+            question=question_text,
+            choices=choices,
+            correct_letter=correct_letter,
+            explanation=explanation,
+            skill=skill,
+            category=category,
+            difficulty=difficulty,
+        )
+        
+        # Use table-specific schema
+        llm_with_structure = llm.with_structured_output(GeneratedRWQuestionWithTable)
+        
+        if verbose:
+            print(f"[generate_rw_question] Calling LLM for table generation... (prompt length: {len(prompt)} chars)")
+        
+        try:
+            generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
+            if verbose:
+                print("[generate_rw_question] LLM table generation completed successfully")
+                print(f"  New table caption: {generated.table_caption}")
+        except Exception as e:
+            if verbose:
+                print(f"[generate_rw_question] Error during LLM generation: {e}")
+            raise
+        
+        # Rebuild table HTML from generated data
+        new_table_spec = TableSpec(
+            caption=generated.table_caption,
+            headers=generated.table_headers,
+            rows=generated.table_data,
+            row_labels=generated.table_row_labels,
+            table_class=table_spec.table_class,  # Preserve original class
+            original_html=""  # Not needed for new generation
+        )
+        
+        table_html = new_table_spec.to_html()
+        
+        # Combine paragraph + table
+        final_paragraph = generated.paragraph_text + "\n\n" + table_html
+        
+        if verbose:
+            print(f"[generate_rw_question] Rebuilt table HTML ({len(table_html)} chars)")
+        
+        # Build new question
+        new_question = {
+            "id": str(uuid.uuid4()),
+            "subject": sample.get("subject", "SAT"),
+            "pool": sample.get("pool", "generated"),
+            "section": section,
+            "category": category,
+            "skill": skill,
+            "difficulty": difficulty,
+            "type": "multiple-choice",
+            "question": {
+                "paragraph": final_paragraph,
+                "question": generated.question,
+                "choices": generated.choices,
+                "correct_answer": [generated.correct_answer_letter],
+                "explanation": generated.explanation,
+            },
+            "image_url": None,
+        }
+        
+        return new_question
+    
+    # Handle graph case
     if has_graph:
-        # For now, extract text without graph
         paragraph_for_prompt = _extract_paragraph_without_graph(paragraph)
         if verbose:
             print(f"[generate_rw_question] Extracted paragraph without graph: {len(paragraph_for_prompt)} chars")

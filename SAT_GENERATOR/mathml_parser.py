@@ -16,6 +16,67 @@ class GraphSpec:
     long_description_html: Optional[str] = None  # HTML structure preserved
 
 
+@dataclass
+class TableSpec:
+    """Structured representation of HTML table for template-based regeneration."""
+    caption: Optional[str] = None  # Table caption/title
+    headers: Optional[List[str]] = None  # Column headers
+    rows: Optional[List[List[str]]] = None  # Data rows (list of lists)
+    row_labels: Optional[List[str]] = None  # Row labels (first column if it's <th>)
+    original_html: Optional[str] = None  # Original HTML for reference
+    table_class: Optional[str] = None  # CSS class (e.g., "gdr")
+    
+    def to_html(self) -> str:
+        """
+        Build HTML table from TableSpec.
+        Recreates the same structure as SAT tables.
+        """
+        table_class_attr = f' class="{self.table_class}"' if self.table_class else ''
+        
+        parts = []
+        parts.append('<p>')
+        parts.append('<figure class="table">')
+        parts.append(f'<table{table_class_attr}>')
+        
+        # Caption
+        if self.caption:
+            parts.append('<caption style="caption-side: top;">')
+            parts.append(f'<p style="text-align: center;">{self.caption}</p>')
+            parts.append('</caption>')
+        
+        # Headers
+        if self.headers:
+            parts.append('<thead>')
+            parts.append('<tr>')
+            for header in self.headers:
+                parts.append(f'<th scope="col" style="text-align: center;vertical-align: bottom;">{header}</th>')
+            parts.append('</tr>')
+            parts.append('</thead>')
+        
+        # Data rows
+        if self.rows:
+            parts.append('<tbody>')
+            for i, row in enumerate(self.rows):
+                parts.append('<tr>')
+                
+                # Row label (first column as <th>)
+                if self.row_labels and i < len(self.row_labels) and self.row_labels[i]:
+                    parts.append(f'<th scope="row" style="text-align: left;">{self.row_labels[i]}</th>')
+                
+                # Data cells
+                for cell in row:
+                    parts.append(f'<td style="text-align: center;">{cell}</td>')
+                
+                parts.append('</tr>')
+            parts.append('</tbody>')
+        
+        parts.append('</table>')
+        parts.append('</figure>')
+        parts.append('</p>')
+        
+        return ''.join(parts)
+
+
 class MathMLParser:
     """
     - Parse HTML + MathML -> clean text
@@ -31,43 +92,50 @@ class MathMLParser:
         Return:
         {
           "text": "...",
-          "graph": GraphSpec | None
+          "graph": GraphSpec | None,
+          "table": TableSpec | None
         }
         """
         s = (html_or_mathml or "").strip()
         if not s:
-            return {"text": "", "graph": None}
+            return {"text": "", "graph": None, "table": None}
 
         # Remove MathML namespace
         s = s.replace('xmlns="http://www.w3.org/1998/Math/MathML"', '')
 
-        # --- Step 1: Extract graph long description BEFORE XML parsing ---
+        # --- Step 1: Extract table if present ---
+        table = self._extract_table(s)
+        
+        # --- Step 2: Extract graph long description BEFORE XML parsing ---
         # (Because SVG may contain invalid XML or huge payload)
         long_desc_result = self._extract_graph_long_description(s)
         graph = self._long_desc_to_graphspec(long_desc_result, full_html=s) if long_desc_result else None
 
-        # --- Step 2: Remove SVG entirely to save parsing cost ---
+        # --- Step 3: Remove SVG and table entirely to save parsing cost ---
         s_wo_svg = self._remove_svg_blocks(s)
+        s_wo_table = self._remove_table_blocks(s_wo_svg)
 
-        # --- Step 3: Parse remaining HTML/MathML ---
+        # --- Step 4: Parse remaining HTML/MathML ---
         try:
-            root = ET.fromstring(f"<root>{s_wo_svg}</root>")
+            root = ET.fromstring(f"<root>{s_wo_table}</root>")
             text = self._parse_children(root).strip()
         except Exception:
             # fallback: remove tags roughly
-            text = self._strip_tags_fallback(s_wo_svg).strip()
+            text = self._strip_tags_fallback(s_wo_table).strip()
 
-        return {"text": text, "graph": graph}
+        return {"text": text, "graph": graph, "table": table}
 
     def parse_paragraph(self, paragraph_html: str) -> Dict[str, Any]:
         """
-        Parse paragraph HTML that may contain a graph.
+        Parse paragraph HTML that may contain a graph or table.
         
         Return:
         {
-          "text": "...",  # Plain text of paragraph (no SVG/graph)
+          "text": "...",  # Plain text of paragraph (no SVG/graph/table)
           "graph": GraphSpec | None,  # Graph info if present
+          "table": TableSpec | None,  # Table info if present
           "has_graph": bool,  # Whether paragraph contains a graph
+          "has_table": bool,  # Whether paragraph contains a table
           "original_html": str  # Original HTML for reference
         }
         """
@@ -78,27 +146,34 @@ class MathMLParser:
         # Remove MathML namespace
         s = s.replace('xmlns="http://www.w3.org/1998/Math/MathML"', '')
 
-        # --- Step 1: Extract graph long description ---
+        # --- Step 1: Extract table if present ---
+        table = self._extract_table(s)
+        has_table = table is not None
+        
+        # --- Step 2: Extract graph long description ---
         long_desc_result = self._extract_graph_long_description(s)
         graph = self._long_desc_to_graphspec(long_desc_result, full_html=s) if long_desc_result else None
         has_graph = graph is not None
 
-        # --- Step 2: Remove SVG and sr-only div entirely to get paragraph text ---
+        # --- Step 3: Remove SVG, table, and sr-only div entirely to get paragraph text ---
         s_wo_svg = self._remove_svg_blocks(s)
-        s_wo_svg = self._remove_sr_only(s_wo_svg)  # Remove long description div
+        s_wo_table = self._remove_table_blocks(s_wo_svg)
+        s_wo_table = self._remove_sr_only(s_wo_table)  # Remove long description div
 
-        # --- Step 3: Parse remaining HTML to get text ---
+        # --- Step 4: Parse remaining HTML to get text ---
         try:
-            root = ET.fromstring(f"<root>{s_wo_svg}</root>")
+            root = ET.fromstring(f"<root>{s_wo_table}</root>")
             text = self._parse_children(root).strip()
         except Exception:
             # fallback: remove tags roughly
-            text = self._strip_tags_fallback(s_wo_svg).strip()
+            text = self._strip_tags_fallback(s_wo_table).strip()
 
         return {
             "text": text,
             "graph": graph,
+            "table": table,
             "has_graph": has_graph,
+            "has_table": has_table,
             "original_html": paragraph_html
         }
 
@@ -163,6 +238,108 @@ class MathMLParser:
 
         return ''
 
+    # ----------------------------
+    # Table extraction
+    # ----------------------------
+    def _extract_table(self, html: str) -> Optional[TableSpec]:
+        """
+        Extract HTML table and parse into structured TableSpec.
+        Handles SAT-style tables with <figure><table>...</table></figure>
+        """
+        # Find table block (may be wrapped in <figure>)
+        table_match = re.search(
+            r'<figure[^>]*>.*?(<table[^>]*>.*?</table>).*?</figure>',
+            html,
+            flags=re.DOTALL | re.IGNORECASE
+        )
+        
+        # Fallback: table without figure wrapper
+        if not table_match:
+            table_match = re.search(
+                r'(<table[^>]*>.*?</table>)',
+                html,
+                flags=re.DOTALL | re.IGNORECASE
+            )
+        
+        if not table_match:
+            return None
+        
+        table_html = table_match.group(1) if len(table_match.groups()) > 0 else table_match.group(0)
+        
+        # Parse table structure
+        return self._parse_html_table(table_html)
+    
+    def _parse_html_table(self, table_html: str) -> Optional[TableSpec]:
+        """
+        Parse HTML table into TableSpec with headers, rows, and data.
+        """
+        try:
+            # Extract caption
+            caption = None
+            caption_match = re.search(r'<caption[^>]*>(.*?)</caption>', table_html, flags=re.DOTALL | re.IGNORECASE)
+            if caption_match:
+                caption_html = caption_match.group(1)
+                caption = self._strip_tags_fallback(caption_html).strip()
+            
+            # Extract table class
+            table_class = None
+            class_match = re.search(r'<table[^>]*class=["\']([^"\']+)["\']', table_html, re.IGNORECASE)
+            if class_match:
+                table_class = class_match.group(1)
+            
+            # Extract headers from <thead>
+            headers = []
+            thead_match = re.search(r'<thead[^>]*>(.*?)</thead>', table_html, flags=re.DOTALL | re.IGNORECASE)
+            if thead_match:
+                thead_html = thead_match.group(1)
+                # Find all <th> in header row
+                header_cells = re.findall(r'<th[^>]*>(.*?)</th>', thead_html, flags=re.DOTALL | re.IGNORECASE)
+                headers = [self._strip_tags_fallback(cell).strip() for cell in header_cells]
+            
+            # Extract data rows from <tbody>
+            rows = []
+            row_labels = []
+            tbody_match = re.search(r'<tbody[^>]*>(.*?)</tbody>', table_html, flags=re.DOTALL | re.IGNORECASE)
+            if tbody_match:
+                tbody_html = tbody_match.group(1)
+                # Find all <tr> rows
+                tr_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', tbody_html, flags=re.DOTALL | re.IGNORECASE)
+                
+                for tr_html in tr_matches:
+                    row_data = []
+                    
+                    # Check if first cell is <th> (row label)
+                    th_match = re.search(r'<th[^>]*>(.*?)</th>', tr_html, flags=re.DOTALL | re.IGNORECASE)
+                    if th_match:
+                        row_label = self._strip_tags_fallback(th_match.group(1)).strip()
+                        row_labels.append(row_label)
+                    else:
+                        row_labels.append(None)
+                    
+                    # Extract all <td> cells
+                    td_matches = re.findall(r'<td[^>]*>(.*?)</td>', tr_html, flags=re.DOTALL | re.IGNORECASE)
+                    row_data = [self._strip_tags_fallback(cell).strip() for cell in td_matches]
+                    
+                    if row_data:  # Only add non-empty rows
+                        rows.append(row_data)
+            
+            # Only create TableSpec if we have meaningful data
+            if not headers and not rows:
+                return None
+            
+            return TableSpec(
+                caption=caption,
+                headers=headers,
+                rows=rows,
+                row_labels=row_labels if any(row_labels) else None,
+                original_html=table_html,
+                table_class=table_class
+            )
+        
+        except Exception as e:
+            # If parsing fails, return None
+            return None
+    
     # ----------------------------
     # Graph extraction
     # ----------------------------
@@ -339,6 +516,13 @@ class MathMLParser:
     def _remove_svg_blocks(self, html: str) -> str:
         # Remove <svg>...</svg> completely
         html = re.sub(r'<svg\b.*?</svg>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        return html
+    
+    def _remove_table_blocks(self, html: str) -> str:
+        # Remove <figure><table>...</table></figure> completely
+        html = re.sub(r'<figure[^>]*>.*?<table[^>]*>.*?</table>.*?</figure>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        # Also remove standalone tables
+        html = re.sub(r'<table[^>]*>.*?</table>', '', html, flags=re.DOTALL | re.IGNORECASE)
         return html
 
     def _remove_sr_only(self, html: str) -> str:
