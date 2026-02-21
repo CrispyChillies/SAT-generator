@@ -2,15 +2,63 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "find_min_with_labels",
+      "function_name": "llm_generate_step",
       "params_meaning": [
         {
-          "param": "values",
-          "meaning": "the percent of cars for sale for each model year"
+          "param": "requirement",
+          "meaning": "the task or question to be addressed, specifying what needs to be restated or identified"
+        }
+      ]
+    },
+    {
+      "step_number": 2,
+      "function_name": "subtract",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the proportion of municipalities with a specific outcome when the announcement is made before the election"
         },
         {
-          "param": "labels",
-          "meaning": "the model years corresponding to each percent value"
+          "param": "b",
+          "meaning": "the proportion of municipalities with the same outcome when the announcement is made after the election"
+        }
+      ]
+    },
+    {
+      "step_number": 3,
+      "function_name": "subtract",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the proportion of municipalities with a specific outcome when the announcement is made before the election"
+        },
+        {
+          "param": "b",
+          "meaning": "the proportion of municipalities with the same outcome when the announcement is made after the election"
+        }
+      ]
+    },
+    {
+      "step_number": 4,
+      "function_name": "subtract",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the proportion of municipalities with a specific outcome when the announcement is made before the election"
+        },
+        {
+          "param": "b",
+          "meaning": "the proportion of municipalities with the same outcome when the announcement is made after the election"
+        }
+      ]
+    },
+    {
+      "step_number": 5,
+      "function_name": "llm_generate_step",
+      "params_meaning": [
+        {
+          "param": "requirement",
+          "meaning": "the instruction to summarize the calculation results and explain their impact on the hypothesis"
         }
       ]
     }

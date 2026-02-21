@@ -1,0 +1,25 @@
+{
+  "category": "Information and Ideas",
+  "difficulty": "Hard",
+  "id": "81b956a1-d9c8-44d3-a105-71f02c07775f",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "A. Hargrove's analysis included a wider range of genres than Thompson's review, leading to the higher count of notable works.",
+      "B. some works that Thompson classified as minor contributions may have been reassessed by Hargrove's team as significant literary achievements.",
+      "C. Thompson's methodology may have been less rigorous in evaluating the depth and impact of certain literary themes compared to Hargrove's approach.",
+      "D. the criteria for determining literary significance may have inadvertently led Hargrove to underestimate the number of minor works in his analysis."
+    ],
+    "correct_answer": [
+      "B"
+    ],
+    "explanation": "Choice B is the best answer because it logically connects to the paragraph's discussion regarding the differences in the two studies' findings. The text states that Hargrove's count of notable works is significantly higher than Thompson's and that this difference cannot only be attributed to newly published works. This implies there were existing works that were viewed differently by the two analysts, suggesting that Thompson may have classified certain works as minor, while Hargrove recognized them as significant. This directly addresses the discrepancy in their findings. \n\nChoice A is incorrect because it asserts that Hargrove's analysis included a wider range of genres, which is not supported by the text. The paragraph does not mention genre diversity as a factor affecting the count. \n\nChoice C is misleading because while it suggests a possible reason for the difference, it does not directly address the classification of works and therefore does not logically complete the text as well as B does. It also does not align with the idea that the works themselves were reassessed. \n\nChoice D is incorrect because it suggests an underestimation of minor works, which contradicts the paragraph's assertion that Hargrove reported a higher count of notable works. If anything, Hargrove's criteria for significance led to a higher count rather than an underestimation.",
+    "paragraph": "In a recent analysis of early 20th-century American literature, James Hargrove and his team discovered approximately 150 notable works, a figure significantly higher than the 85 works identified in an earlier review by Sarah Thompson in 1995. This difference is not solely explained by the inclusion of new publications in the interim, as many works had been overlooked in Thompson's original analysis. Furthermore, the interpretative frameworks for assessing literary significance have evolved, allowing for a broader understanding of what constitutes a notable work. The two studies reported similar figures for poetry and drama, indicating that <span aria-hidden=\"true\">______</span>",
+    "question": "Which choice most logically completes the text?"
+  },
+  "section": "Reading and Writing",
+  "skill": "Inferences",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}

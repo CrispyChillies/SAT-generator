@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 """
-Luồng sinh câu hỏi và đáp án theo flow.md:
+Unified flow for generating SAT questions (Math and Reading & Writing).
 
+Math Flow:
   A (question / explanation / correct_answer)
    ├─→ B: Agent sinh steps_function_and_meaning.json
    ├─→ C: Gen câu hỏi mới, explanation và đáp án
    └─→ D: Sinh đáp án cho câu hỏi mới (dựa vào file JSON từ B và câu hỏi từ C)
 
-Chạy: python run_flow.py [--sample-index N] [--question-id ID] [--questions-path PATH] [--out-dir DIR]
+R&W Flow:
+  A (paragraph / question / choices / correct_answer / explanation)
+   ├─→ B: Solver analyzes original question (reasoning trace)
+   ├─→ C: Gen câu hỏi mới với new scenario
+   └─→ D: Validate new question (verify answer correctness)
+
+Usage: python run_flow.py [--sample-index N] [--question-id ID] [--questions-path PATH] [--out-dir DIR]
 """
 
 import os
 import json
 import argparse
+import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -21,12 +29,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Import các module theo flow
+# Import modules for Math flow
 # ---------------------------------------------------------------------------
 from generate_question_langchain import generate_new_question, load_sample_question
 from agent import LangGraphMathAgent
 from sat_math_solver import solve_with_steps
 from mathml_parser import MathMLParser
+
+# ---------------------------------------------------------------------------
+# Import modules for R&W flow
+# ---------------------------------------------------------------------------
+from generate_rw_question import generate_new_rw_question
+from rw_question_solver import solve_rw_question_simple
 
 # ---------------------------------------------------------------------------
 # Preprocess: multiple-choice A/B/C/D → giá trị đáp án (nội dung choice)
@@ -71,10 +85,28 @@ def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Luồng chính
+# Question type detection
 # ---------------------------------------------------------------------------
 
-def run_flow(
+def is_reading_writing_question(sample: Dict[str, Any]) -> bool:
+    """
+    Determine if a question is Reading & Writing (vs Math).
+    
+    Args:
+        sample: Question dict from questions_practice_test.json
+    
+    Returns:
+        True if R&W question, False if Math question
+    """
+    section = sample.get("section", "")
+    return "reading" in section.lower() and "writing" in section.lower()
+
+
+# ---------------------------------------------------------------------------
+# Math Flow (existing)
+# ---------------------------------------------------------------------------
+
+def run_math_flow(
     sample: Dict[str, Any],
     *,
     steps_json_path: str = "steps_function_and_meaning.json",
@@ -151,7 +183,7 @@ def run_flow(
     # question_text = parser.parse(question_html) if question_html else question_html
     parsed = parser.parse(question_html) if question_html else question_html
     question_text = parsed['text']
-    graph = parsed['graph']
+    # graph = parsed['graph']
 
     result_bag = {
         "steps_json_path": str(steps_path),
@@ -260,13 +292,317 @@ def run_flow(
     return result_bag
 
 
+# ---------------------------------------------------------------------------
+# Reading & Writing Flow
+# ---------------------------------------------------------------------------
+
+def run_rw_flow(
+    sample: Dict[str, Any],
+    *,
+    out_dir: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Run R&W question generation and validation flow.
+    
+    Flow:
+      A: Extract original question, paragraph, choices, answer, explanation
+      B: Solver analyzes original question → reasoning trace
+      C: Generator creates new question (new scenario, same skill/reasoning)
+      D: Solver validates new question → verifies answer is correct
+    
+    Args:
+        sample: Sample R&W question from questions_practice_test.json
+        out_dir: Output directory for saved files
+        api_key: OpenAI API key (None = use OPENAI_API_KEY env)
+        model: LLM model name
+        verbose: Print detailed logs
+    
+    Returns:
+        Dict with:
+        - steps_json_path: None (R&W doesn't use steps, kept for consistency)
+        - new_question_item: Generated question dict
+        - new_question_text: Generated question text
+        - answer_result: Validation result (renamed from validation_result for consistency)
+        - error: Error message if any
+        - _rw_original_analysis: Original question analysis (internal/debug)
+    """
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {
+            "error": "OPENAI_API_KEY not set in environment",
+            "original_analysis": None,
+            "new_question_item": None,
+            "validation_result": None,
+        }    
+    result_bag = {
+        "steps_json_path": None,  # R&W doesn't use steps, but keep for consistency
+        "new_question_item": None,
+        "new_question_text": None,
+        "answer_result": None,  # Renamed from validation_result for consistency
+        "error": None,
+        "_rw_original_analysis": None,  # Internal field for debugging
+    }
+    
+    # --- A: Extract original question components ---
+    q_block = sample.get("question", {})
+    paragraph = (q_block.get("paragraph") or "").strip()
+    question = (q_block.get("question") or "").strip()
+    choices = q_block.get("choices") or []
+    correct_answer = q_block.get("correct_answer")
+    explanation = (q_block.get("explanation") or "").strip()
+    
+    skill = sample.get("skill", "")
+    category = sample.get("category", "")
+    difficulty = sample.get("difficulty", "Medium")
+    
+    if not paragraph or not question or not choices:
+        result_bag["error"] = "Sample question missing required fields (paragraph, question, or choices)"
+        return result_bag
+    
+    # Extract correct answer letter
+    if isinstance(correct_answer, list) and len(correct_answer) > 0:
+        correct_letter = correct_answer[0].strip().upper()
+    elif isinstance(correct_answer, str):
+        correct_letter = correct_answer.strip().upper()
+    else:
+        correct_letter = "A"
+    
+    if verbose:
+        print("=" * 70)
+        print("ORIGINAL R&W QUESTION")
+        print("=" * 70)
+        print(f"ID: {sample.get('id')}")
+        print(f"Skill: {skill}")
+        print(f"Category: {category}")
+        print(f"Difficulty: {difficulty}")
+        print(f"Correct Answer: {correct_letter}")
+        print(f"Paragraph (first 150 chars): {paragraph[:150]}...")
+        print(f"Question: {question}")
+        print()
+    
+    # --- B: Analyze original question ---
+    if verbose:
+        print("=" * 70)
+        print("B: ANALYZING ORIGINAL QUESTION")
+        print("=" * 70)
+    
+    try:
+        original_analysis = solve_rw_question_simple(
+            paragraph=paragraph,
+            question=question,
+            choices=choices,
+            skill=skill,
+            api_key=api_key,
+            model=model,
+            verbose=verbose,
+        )
+        result_bag["_rw_original_analysis"] = original_analysis
+        
+        if original_analysis.get("error"):
+            if verbose:
+                print(f"Warning: {original_analysis['error']}")
+        else:
+            solver_answer = original_analysis.get("final_answer_letter")
+            if verbose:
+                print(f"Solver's answer: {solver_answer}")
+                print(f"Correct answer: {correct_letter}")
+                if solver_answer == correct_letter:
+                    print("✓ Solver got the correct answer!")
+                else:
+                    print("✗ Solver's answer differs from correct answer")
+        
+        # Save reasoning trace
+        # if out_dir:
+        #     trace_path = out_dir / "original_question_reasoning.json"
+        #     with open(trace_path, "w", encoding="utf-8") as f:
+        #         json.dump(original_analysis, f, ensure_ascii=False, indent=2)
+        #     if verbose:
+        #         print(f"Saved reasoning trace to {trace_path}")
+    
+    except Exception as e:
+        result_bag["error"] = f"Error analyzing original: {e}"
+        if verbose:
+            print(f"Error: {e}")
+            traceback.print_exc()
+        return result_bag
+    
+    # --- C: Generate new question ---
+    if verbose:
+        print("\n" + "=" * 70)
+        print("C: GENERATING NEW R&W QUESTION")
+        print("=" * 70)
+    
+    try:
+        # Pass api_key and verbose to ensure proper LLM initialization and debugging
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model=model, temperature=0.7, api_key=api_key)
+        new_question = generate_new_rw_question(
+            sample, 
+            llm=llm, 
+            api_key=api_key,
+            model=model,
+            verbose=verbose
+        )
+        result_bag["new_question_item"] = new_question
+        
+        new_q_block = new_question.get("question", {})
+        new_paragraph = (new_q_block.get("paragraph") or "").strip()
+        new_question_text = (new_q_block.get("question") or "").strip()
+        new_choices = new_q_block.get("choices") or []
+        new_correct_answer = new_q_block.get("correct_answer")
+        new_explanation = (new_q_block.get("explanation") or "").strip()
+        
+        # Store new_question_text in result_bag for consistency with Math flow
+        result_bag["new_question_text"] = new_question_text
+        
+        if isinstance(new_correct_answer, list) and len(new_correct_answer) > 0:
+            new_correct_letter = new_correct_answer[0].strip().upper()
+        elif isinstance(new_correct_answer, str):
+            new_correct_letter = new_correct_answer.strip().upper()
+        else:
+            new_correct_letter = "A"
+        
+        if verbose:
+            print(f"Generated new question:")
+            print(f"  Skill: {new_question.get('skill')}")
+            print(f"  Difficulty: {new_question.get('difficulty')}")
+            print(f"  Correct Answer: {new_correct_letter}")
+            print(f"  Paragraph (first 150 chars): {new_paragraph[:150]}...")
+            print(f"  Question: {new_question_text}")
+            print()
+    
+    except Exception as e:
+        result_bag["error"] = f"Error generating question: {e}"
+        if verbose:
+            print(f"Error: {e}")
+            traceback.print_exc()
+        return result_bag
+    
+    # --- D: Validate new question ---
+    if verbose:
+        print("\n" + "=" * 70)
+        print("D: VALIDATING NEW QUESTION")
+        print("=" * 70)
+    
+    try:
+        validation_result = solve_rw_question_simple(
+            paragraph=new_paragraph,
+            question=new_question_text,
+            choices=new_choices,
+            skill=skill,
+            api_key=api_key,
+            model=model,
+            verbose=verbose,
+        )
+        # Store as answer_result for consistency with Math flow
+        result_bag["answer_result"] = validation_result
+        
+        if validation_result.get("error"):
+            if verbose:
+                print(f"Warning: {validation_result['error']}")
+        else:
+            validator_answer = validation_result.get("final_answer_letter")
+            validator_result = validation_result.get("final_result")
+            validator_answer_text = validation_result.get("answer_text")
+            
+            if verbose:
+                print(f"Validator's answer: {validator_answer}")
+                print(f"Generated correct answer: {new_correct_letter}")
+                if validator_result:
+                    print(f"Validator's choice text (first 100 chars): {validator_result[:100]}...")
+                if validator_answer_text:
+                    print(f"Answer text: {validator_answer_text[:150]}...")
+                if validator_answer == new_correct_letter:
+                    print("✓ Validator confirms the generated answer is correct!")
+                else:
+                    print("✗ Validator's answer differs - may need review")
+        
+        # Save validation result
+        if out_dir:
+            val_path = out_dir / "new_question_validation.json"
+            with open(val_path, "w", encoding="utf-8") as f:
+                json.dump(validation_result, f, ensure_ascii=False, indent=2)
+            if verbose:
+                print(f"Saved validation result to {val_path}")
+    
+    except Exception as e:
+        result_bag["error"] = (result_bag["error"] or "") + f"; Validation error: {e}"
+        if verbose:
+            print(f"Error: {e}")
+            traceback.print_exc()
+    
+    return result_bag
+
+
+# ---------------------------------------------------------------------------
+# Unified Flow - Routes to Math or R&W based on question type
+# ---------------------------------------------------------------------------
+
+def run_flow(
+    sample: Dict[str, Any],
+    *,
+    steps_json_path: str = "steps_function_and_meaning.json",
+    out_dir: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Unified flow that automatically routes to Math or R&W generation based on question type.
+    
+    Args:
+        sample: Question from questions_practice_test.json
+        steps_json_path: Path for steps JSON (Math questions only)
+        out_dir: Output directory
+        api_key: OpenAI API key
+        model: LLM model name
+        verbose: Print detailed logs
+    
+    Returns:
+        Dict with results (structure depends on question type)
+    """
+    # Detect question type
+    is_rw = is_reading_writing_question(sample)
+    
+    if verbose:
+        q_type = "Reading & Writing" if is_rw else "Math"
+        print(f"\n{'=' * 70}")
+        print(f"DETECTED QUESTION TYPE: {q_type}")
+        print(f"{'=' * 70}\n")
+    
+    # Route to appropriate flow
+    if is_rw:
+        return run_rw_flow(
+            sample=sample,
+            out_dir=out_dir,
+            api_key=api_key,
+            model=model,
+            verbose=verbose,
+        )
+    else:
+        return run_math_flow(
+            sample=sample,
+            steps_json_path=steps_json_path,
+            out_dir=out_dir,
+            api_key=api_key,
+            model=model,
+            verbose=verbose,
+        )
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Chạy luồng theo flow.md: Agent → steps JSON, Gen câu hỏi mới → Sinh đáp án câu mới.")
+    ap = argparse.ArgumentParser(
+        description="Unified flow for generating SAT questions (Math and Reading & Writing). "
+                    "Automatically detects question type and routes to appropriate generation pipeline."
+    )
     ap.add_argument("--sample-index", type=int, default=0, help="Index câu mẫu trong file questions (mặc định 0)")
     ap.add_argument("--question-id", type=str, default=None, help="Lấy câu mẫu theo id thay vì index")
     ap.add_argument("--questions-path", type=str, default="questions_practice_test.json", help="Đường dẫn file danh sách câu hỏi")
-    ap.add_argument("--out-dir", type=str, default=None, help="Thư mục ghi steps JSON và file kết quả (mặc định: thư mục hiện tại)")
-    ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (ghi trong out-dir)")
+    ap.add_argument("--out-dir", type=str, default=None, help="Thư mục ghi kết quả (mặc định: output/)")
+    ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (Math questions only)")
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
@@ -278,31 +614,47 @@ def main():
         question_id=args.question_id,
     )
 
+    # Set default output directory
+    out_dir = args.out_dir if args.out_dir else "output"
+
     result = run_flow(
         sample,
         steps_json_path=args.steps_json,
-        out_dir=args.out_dir,
+        out_dir=out_dir,
         model=args.model,
         verbose=not args.quiet,
     )
 
     if args.save_result:
-        # Chuẩn hóa để ghi JSON (bỏ object phức tạp nếu cần)
-        to_save = {
-            "steps_json_path": result.get("steps_json_path"),
-            "new_question_item": result.get("new_question_item"),
-            "new_question_text": result.get("new_question_text"),
-            "answer_result": result.get("answer_result"),
-            "error": result.get("error"),
-        }
+        # Save complete result (structure varies by question type)
         with open(args.save_result, "w", encoding="utf-8") as f:
-            json.dump(to_save, f, ensure_ascii=False, indent=2)
+            json.dump(result, f, ensure_ascii=False, indent=2)
         print(f"Đã lưu kết quả: {args.save_result}")
 
     if result.get("error"):
         print("Lỗi:", result["error"])
         return 1
-    print("\nLuồng hoàn tất.")
+    
+    # Success message
+    if not args.quiet:
+        print("\n" + "=" * 70)
+        print("✓ Luồng hoàn tất thành công!")
+        print("=" * 70)
+        
+        # Show what was generated
+        is_rw = is_reading_writing_question(sample)
+        if is_rw:
+            print("Generated: Reading & Writing question")
+            if result.get("new_question_item"):
+                print(f"  Output: {out_dir}/new_question.json")
+                print(f"  Validation: {out_dir}/new_question_validation.json")
+        else:
+            print("Generated: Math question")
+            if result.get("steps_json_path"):
+                print(f"  Steps: {result['steps_json_path']}")
+            if result.get("new_question_item"):
+                print(f"  Question: {out_dir}/new_question.json")
+    
     return 0
 
 
