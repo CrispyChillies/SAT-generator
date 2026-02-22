@@ -25,6 +25,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 from mathml_parser import MathMLParser, TableSpec
+from openai import LengthFinishReasonError
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -107,6 +108,36 @@ class GeneratedRWQuestionWithGroupedBarChart(BaseModel):
     def validate_choices(cls, v):
         if len(v) != 4:
             raise ValueError("Must have exactly 4 choices")
+        return v
+
+
+class GeneratedRWQuestionWithBarChart(BaseModel):
+    """Generated R&W question with simple bar chart (new scenario with new data)."""
+    paragraph_text: str = Field(description="New paragraph text WITHOUT the graph (describes new scenario)")
+    graph_title: str = Field(description="New graph title")
+    graph_y_label: str = Field(description="Y-axis label (appropriate for new data)")
+    graph_x_label: str = Field(description="X-axis label (e.g., 'Glacier', 'Product', 'City')")
+    graph_categories: List[str] = Field(description="Category names on X-axis (same number as original)")
+    graph_values: List[float] = Field(description="Values for each category (Y-axis data)")
+    question: str = Field(description="New question text (usually same as original)")
+    choices: List[str] = Field(description="Exactly 4 answer choices")
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="Letter of the correct answer")
+    explanation: str = Field(description="Explanation of the correct answer")
+    
+    @field_validator("choices")
+    @classmethod
+    def validate_choices(cls, v):
+        if len(v) != 4:
+            raise ValueError("Must have exactly 4 choices")
+        return v
+    
+    @field_validator("graph_values")
+    @classmethod
+    def validate_values_match_categories(cls, v, info):
+        if 'graph_categories' in info.data:
+            categories = info.data['graph_categories']
+            if len(v) != len(categories):
+                raise ValueError(f"Number of values ({len(v)}) must match number of categories ({len(categories)})")
         return v
 
 
@@ -220,6 +251,123 @@ def _infer_logical_schema(skill: str, paragraph: str, choices: List[str]) -> str
         return "Logical evaluation of choices against paragraph evidence"
 
 
+def _calculate_clean_y_axis_range(max_value: float) -> tuple:
+    """
+    Calculate clean, SAT-style y-axis range for graphs.
+    
+    Args:
+        max_value: Maximum data value
+    
+    Returns:
+        Tuple of (y_min, y_max, y_increment) with clean, rounded values
+    
+    Examples:
+        - max_value=150 → (0, 200, 50)
+        - max_value=45 → (0, 50, 10)
+        - max_value=750 → (0, 1000, 100)
+    """
+    import math
+    
+    # Add 20% padding to max value
+    padded_max = max_value * 1.2
+    
+    # Determine appropriate increment based on magnitude
+    if padded_max <= 50:
+        increment = 10
+    elif padded_max <= 100:
+        increment = 20
+    elif padded_max <= 200:
+        increment = 50
+    elif padded_max <= 500:
+        increment = 50
+    elif padded_max <= 1000:
+        increment = 100
+    elif padded_max <= 2000:
+        increment = 200
+    elif padded_max <= 5000:
+        increment = 500
+    else:
+        increment = 1000
+    
+    # Round y_max UP to nearest multiple of increment
+    y_max = math.ceil(padded_max / increment) * increment
+    
+    return (0, int(y_max), int(increment))
+
+
+def _generate_bar_chart_svg(
+    title: str,
+    y_label: str,
+    x_label: str,
+    categories: List[str],
+    values: List[float],
+    y_range: Optional[tuple] = None,
+) -> str:
+    """
+    Generate simple bar chart SVG using matplotlib.
+    
+    Args:
+        title: Graph title
+        y_label: Y-axis label
+        x_label: X-axis label
+        categories: List of category names (X-axis labels)
+        values: List of values for each category
+        y_range: Optional (min, max, increment) for y-axis
+    
+    Returns:
+        SVG string
+    """
+    # Set up the figure with SAT-style formatting
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Prepare data for bars
+    num_categories = len(categories)
+    x = np.arange(num_categories)
+    
+    # Colors: dark gray, light gray, black (matching SAT style)
+    colors = ['#666666', '#CCCCCC', '#000000']
+    bar_colors = [colors[i % len(colors)] for i in range(num_categories)]
+    
+    # Plot bars
+    ax.bar(x, values, color=bar_colors, edgecolor='black', linewidth=0.9)
+    
+    # Customize axes
+    ax.set_ylabel(y_label, fontfamily='serif', fontsize=12)
+    ax.set_xlabel(x_label, fontfamily='serif', fontsize=12)
+    ax.set_title(title, fontfamily='serif', fontsize=13, wrap=True)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontfamily='serif', fontsize=11)
+    
+    # Set y-axis range if provided
+    if y_range:
+        y_min, y_max, y_inc = y_range
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks(np.arange(y_min, y_max + y_inc, y_inc))
+    
+    # Format y-axis
+    ax.tick_params(axis='y', labelsize=11)
+    for label in ax.get_yticklabels():
+        label.set_fontfamily('serif')
+    
+    # Grid and styling
+    ax.grid(axis='y', alpha=0.3, linestyle='-', linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save to SVG string
+    svg_buffer = io.StringIO()
+    plt.savefig(svg_buffer, format='svg', bbox_inches='tight')
+    plt.close(fig)
+    
+    svg_string = svg_buffer.getvalue()
+    svg_buffer.close()
+    
+    return svg_string
+
+
 def _generate_grouped_bar_chart_svg(
     title: str,
     y_label: str,
@@ -298,6 +446,45 @@ def _generate_grouped_bar_chart_svg(
     svg_buffer.close()
     
     return svg_string
+
+
+def _build_bar_chart_long_description_html(
+    title: str,
+    categories: List[str],
+    values: List[float],
+    y_unit: Optional[str] = None,
+) -> str:
+    """
+    Build the sr-only long description HTML for simple bar chart.
+    
+    Args:
+        title: Graph title
+        categories: List of category names
+        values: List of values for each category
+        y_unit: Optional unit for values (e.g., "square kilometers")
+    
+    Returns:
+        HTML string for sr-only div with long description
+    """
+    html = f'<div aria-label="Long description for bar graph titled {title}" class="sr-only" role="region">\n'
+    html += '<ul>\n'
+    
+    # Data by category
+    html += f'<li>The data for the {len(categories)} categories are as follows: <br/>\n<ul>\n'
+    for i, category in enumerate(categories):
+        value = values[i] if i < len(values) else 0
+        # Format numbers with commas for readability
+        formatted_value = f"{int(value):,}" if value == int(value) else f"{value:,.1f}"
+        if y_unit:
+            html += f'<li>{category}: {formatted_value} {y_unit}</li>\n'
+        else:
+            html += f'<li>{category}: {formatted_value}</li>\n'
+    
+    html += '</ul>\n</li>\n'
+    html += '</ul>\n'
+    html += '</div>'
+    
+    return html
 
 
 def _build_long_description_html(
@@ -594,6 +781,151 @@ Generate a completely new, high-quality SAT R&W question with table now."""
     return prompt
 
 
+def _build_bar_chart_generation_prompt(
+    paragraph: str,
+    graph_spec,  # GraphSpec with x_values and y_values
+    question: str,
+    choices: List[str],
+    correct_letter: str,
+    explanation: str,
+    skill: str,
+    category: str,
+    difficulty: str,
+) -> str:
+    """Build prompt for LLM to generate new R&W question with simple bar chart."""
+    
+    reasoning_type = _infer_reasoning_type(skill, question, paragraph)
+    logical_schema = _infer_logical_schema(skill, paragraph, choices)
+    
+    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
+    
+    # Format graph structure for LLM
+    if graph_spec.y_axis_range:
+        y_axis_range_str = f"Y-axis Range: {graph_spec.y_axis_range[0]} to {graph_spec.y_axis_range[1]} (increments of {graph_spec.y_axis_range[2]})"
+    else:
+        y_axis_range_str = "Y-axis Range: Not specified (infer from data)"
+    
+    graph_structure = f"""**Original Bar Chart Structure:**
+
+Title: {graph_spec.title}
+Y-axis Label: {graph_spec.y_label}
+X-axis Label: {graph_spec.x_label or 'Category'}
+{y_axis_range_str}
+
+Categories: {graph_spec.x_values}
+(These are shown on the X-axis)
+
+Data:
+"""
+    
+    for i, category in enumerate(graph_spec.x_values or []):
+        value = graph_spec.y_values[i] if i < len(graph_spec.y_values or []) else 0
+        graph_structure += f"  {category}: {value}\n"
+    
+    # Analyze data patterns
+    patterns = []
+    if graph_spec.y_values:
+        max_val = max(graph_spec.y_values)
+        min_val = min(graph_spec.y_values)
+        max_idx = graph_spec.y_values.index(max_val)
+        min_idx = graph_spec.y_values.index(min_val)
+        
+        max_category = graph_spec.x_values[max_idx] if max_idx < len(graph_spec.x_values) else "unknown"
+        min_category = graph_spec.x_values[min_idx] if min_idx < len(graph_spec.x_values) else "unknown"
+        
+        patterns.append(f"- Highest value: {max_category} ({max_val})")
+        patterns.append(f"- Lowest value: {min_category} ({min_val})")
+        patterns.append("- Preserve the ranking pattern (highest to lowest)")
+    
+    patterns_text = "\n".join(patterns) if patterns else "- Analyze the original data pattern and preserve it"
+    
+    prompt = f"""You are an SAT Reading & Writing question designer.
+
+Your task: Generate a NEW scenario with a NEW BAR CHART that tests the SAME reasoning skill.
+
+**Original Question Analysis:**
+
+Category: {category}
+Skill: {skill}
+Difficulty: {difficulty}
+Reasoning Type: {reasoning_type}
+Logical Schema: {logical_schema}
+
+{graph_structure}
+
+**Data Patterns to Preserve:**
+{patterns_text}
+
+**Original Paragraph (without graph):**
+{paragraph}
+
+**Original Question:**
+{question}
+
+**Original Choices:**
+{choices_text}
+
+**Correct Answer:** {correct_letter}. {correct_choice}
+
+**Original Explanation:**
+{explanation}
+
+---
+
+**YOUR TASK:**
+
+1. **Create a COMPLETELY NEW scenario** (different topic, different context):
+   - If original is about glaciers, try: products, buildings, species, countries, etc.
+   - Change ALL specific details (names, context, description)
+
+2. **Generate NEW BAR CHART DATA**:
+   - Same structure: {len(graph_spec.x_values or [])} categories
+   - New graph title (related to your new scenario)
+   - New Y-axis label (appropriate for your new measurement type)
+   - New X-axis label (appropriate for your new categories)
+   - New category names ({len(graph_spec.x_values or [])} items)
+   - New numerical data (realistic for your context)
+   - **PRESERVE THE RANKING PATTERN**: If original has highest→middle→lowest, preserve that order!
+
+3. **Write NEW paragraph** describing the scenario (WITHOUT the graph - graph will be shown separately):
+   - Describe the measurement/study context
+   - Mention what is being compared
+   - Set up the question naturally
+   - Keep academic tone
+
+4. **Keep or adapt the question** (usually asking to complete sentence using graph data)
+
+5. **Create 4 answer choices** with SAME distractor logic:
+   - 1 correct choice that accurately describes the data pattern
+   - 3 wrong choices with similar errors as original (wrong comparison, reversed order, incorrect values, etc.)
+
+6. **Write explanation** of why correct answer works and why others don't
+
+**Important:**
+- DO NOT reuse the topic/field from original
+- Keep SAT academic tone
+- Data must be REALISTIC and follow the same ranking pattern as original
+- Same difficulty level: {difficulty}
+- The data should support the same type of comparison/conclusion
+
+**Output JSON with these fields:**
+- paragraph_text: New paragraph WITHOUT graph
+- graph_title: New graph title
+- graph_y_label: Y-axis label
+- graph_x_label: X-axis label (e.g., "Glacier", "Product", "Species")
+- graph_categories: List of {len(graph_spec.x_values or [])} category names
+- graph_values: List of {len(graph_spec.x_values or [])} values (numbers for Y-axis)
+- question: Question text
+- choices: Array of 4 answer choices
+- correct_answer_letter: "A", "B", "C", or "D"
+- explanation: Clear explanation
+
+Generate a completely new, high-quality SAT R&W question with bar chart now."""
+
+    return prompt
+
+
 def _build_grouped_bar_chart_generation_prompt(
     paragraph: str,
     graph_spec,  # GraphSpec with grouped_data
@@ -788,7 +1120,7 @@ def generate_new_rw_question(
             raise ValueError("OPENAI_API_KEY not provided and not found in environment")
         if verbose:
             print(f"[generate_rw_question] Creating LLM with model: {model}")
-        llm = ChatOpenAI(model=model, temperature=0.7, api_key=key)
+        llm = ChatOpenAI(model=model, temperature=0.7, api_key=key, max_tokens=8192)
     
     # Extract metadata
     category = sample.get("category", "")
@@ -863,6 +1195,15 @@ def generate_new_rw_question(
             if verbose:
                 print("[generate_rw_question] LLM table generation completed successfully")
                 print(f"  New table caption: {generated.table_caption}")
+        except LengthFinishReasonError as e:
+            if verbose:
+                print(f"[generate_rw_question] Error: LLM hit token limit during generation")
+                print(f"  Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}")
+                print(f"  Prompt tokens: {e.completion.usage.prompt_tokens if e.completion.usage else 'unknown'}")
+            raise ValueError(
+                f"LLM response exceeded token limit. Try using a model with higher limits or simplifying the prompt. "
+                f"Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}"
+            ) from e
         except Exception as e:
             if verbose:
                 print(f"[generate_rw_question] Error during LLM generation: {e}")
@@ -950,6 +1291,15 @@ def generate_new_rw_question(
                     if verbose:
                         print("[generate_rw_question] LLM grouped bar chart generation completed successfully")
                         print(f"  New graph title: {generated.graph_title}")
+                except LengthFinishReasonError as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Error: LLM hit token limit during generation")
+                        print(f"  Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}")
+                        print(f"  Prompt tokens: {e.completion.usage.prompt_tokens if e.completion.usage else 'unknown'}")
+                    raise ValueError(
+                        f"LLM response exceeded token limit. Try using a model with higher limits or simplifying the prompt. "
+                        f"Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}"
+                    ) from e
                 except Exception as e:
                     if verbose:
                         print(f"[generate_rw_question] Error during LLM generation: {e}")
@@ -981,12 +1331,10 @@ def generate_new_rw_question(
                     if graph_spec.y_axis_range:
                         y_range = graph_spec.y_axis_range
                     else:
-                        # Auto-calculate range from new data
+                        # Auto-calculate clean range from new data
                         all_values = [v for cat_data in graph_data.values() for v in cat_data.values()]
                         max_val = max(all_values) if all_values else 100
-                        y_max = int(max_val * 1.2)  # Add 20% padding
-                        y_inc = 100 if y_max > 500 else 50 if y_max > 200 else 10
-                        y_range = (0, y_max, y_inc)
+                        y_range = _calculate_clean_y_axis_range(max_val)
                     
                     svg_string = _generate_grouped_bar_chart_svg(
                         title=generated.graph_title,
@@ -1061,6 +1409,150 @@ def generate_new_rw_question(
                 }
                 
                 return new_question
+            elif graph_spec.graph_type == "bar" and graph_spec.x_values and graph_spec.y_values:
+                paragraph_for_prompt = parsed["text"]
+                
+                if verbose:
+                    print(f"[generate_rw_question] Detected simple bar chart: {graph_spec.title}")
+                    print(f"  Categories: {len(graph_spec.x_values or [])}")
+                    print(f"  Y-axis: {graph_spec.y_label} ({graph_spec.y_axis_range})")
+                    print(f"  Paragraph without graph: {len(paragraph_for_prompt)} chars")
+                
+                # Build bar chart generation prompt
+                prompt = _build_bar_chart_generation_prompt(
+                    paragraph=paragraph_for_prompt,
+                    graph_spec=graph_spec,
+                    question=question_text,
+                    choices=choices,
+                    correct_letter=correct_letter,
+                    explanation=explanation,
+                    skill=skill,
+                    category=category,
+                    difficulty=difficulty,
+                )
+                
+                # Use bar chart specific schema
+                llm_with_structure = llm.with_structured_output(GeneratedRWQuestionWithBarChart)
+                
+                if verbose:
+                    print(f"[generate_rw_question] Calling LLM for bar chart generation... (prompt length: {len(prompt)} chars)")
+                
+                try:
+                    generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
+                    
+                    if verbose:
+                        print("[generate_rw_question] LLM bar chart generation completed successfully")
+                        print(f"  New graph title: {generated.graph_title}")
+                except LengthFinishReasonError as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Error: LLM hit token limit during generation")
+                        print(f"  Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}")
+                        print(f"  Prompt tokens: {e.completion.usage.prompt_tokens if e.completion.usage else 'unknown'}")
+                    raise ValueError(
+                        f"LLM response exceeded token limit. Try using a model with higher limits or simplifying the prompt. "
+                        f"Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}"
+                    ) from e
+                except Exception as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Error during LLM generation: {e}")
+                    raise
+                
+                # Generate SVG graph using matplotlib
+                if verbose:
+                    print(f"[generate_rw_question] Generating bar chart SVG...")
+                
+                try:
+                    # Infer y-axis range from data if not provided
+                    if graph_spec.y_axis_range:
+                        y_range = graph_spec.y_axis_range
+                    else:
+                        # Auto-calculate clean range from new data
+                        max_val = max(generated.graph_values) if generated.graph_values else 100
+                        y_range = _calculate_clean_y_axis_range(max_val)
+                    
+                    svg_string = _generate_bar_chart_svg(
+                        title=generated.graph_title,
+                        y_label=generated.graph_y_label,
+                        x_label=generated.graph_x_label,
+                        categories=generated.graph_categories,
+                        values=generated.graph_values,
+                        y_range=y_range,
+                    )
+                    
+                    if verbose:
+                        print(f"[generate_rw_question] SVG generated ({len(svg_string)} chars)")
+                except Exception as e:
+                    if verbose:
+                        print(f"[generate_rw_question] Warning: SVG generation failed: {e}")
+                        print(f"[generate_rw_question] Falling back to text description")
+                    svg_string = None
+                
+                # Extract Y-axis unit from y_label if possible
+                y_unit = None
+                if "(" in generated.graph_y_label and ")" in generated.graph_y_label:
+                    # Extract unit from label like "Area (square km)"
+                    import re
+                    unit_match = re.search(r'\(([^)]+)\)', generated.graph_y_label)
+                    if unit_match:
+                        y_unit = unit_match.group(1)
+                
+                # Build long description HTML (sr-only div)
+                long_desc_html = _build_bar_chart_long_description_html(
+                    title=generated.graph_title,
+                    categories=generated.graph_categories,
+                    values=generated.graph_values,
+                    y_unit=y_unit,
+                )
+                
+                if verbose:
+                    print(f"[generate_rw_question] Built long description HTML ({len(long_desc_html)} chars)")
+                
+                # Build complete paragraph with figure block
+                if svg_string:
+                    final_paragraph = _build_figure_block_with_graph(
+                        svg_string=svg_string,
+                        long_description_html=long_desc_html,
+                        paragraph_text=generated.paragraph_text,
+                    )
+                    if verbose:
+                        print(f"[generate_rw_question] Built complete figure block with SVG")
+                else:
+                    # Fallback: text description only
+                    graph_data_description = f"\n\n[Bar chart showing: {generated.graph_title}. Y-axis: {generated.graph_y_label}. Categories: {', '.join(generated.graph_categories)}.]\n\n"
+                    final_paragraph = generated.paragraph_text + graph_data_description + "\n\n" + long_desc_html
+                    if verbose:
+                        print(f"[generate_rw_question] Using fallback text description")
+                
+                # Build new question
+                new_question = {
+                    "id": str(uuid.uuid4()),
+                    "subject": sample.get("subject", "SAT"),
+                    "pool": sample.get("pool", "generated"),
+                    "section": section,
+                    "category": category,
+                    "skill": skill,
+                    "difficulty": difficulty,
+                    "type": "multiple-choice",
+                    "question": {
+                        "paragraph": final_paragraph,
+                        "question": generated.question,
+                        "choices": generated.choices,
+                        "correct_answer": [generated.correct_answer_letter],
+                        "explanation": generated.explanation,
+                    },
+                    "image_url": None,
+                    # Store graph data for potential future SVG generation
+                    "graph_data": {
+                        "type": "bar",
+                        "title": generated.graph_title,
+                        "y_label": generated.graph_y_label,
+                        "x_label": generated.graph_x_label,
+                        "categories": generated.graph_categories,
+                        "values": generated.graph_values,
+                    }
+                }
+                
+                return new_question
     else:
       paragraph_for_prompt = paragraph
     
@@ -1090,6 +1582,15 @@ def generate_new_rw_question(
           generated = llm_with_structure.invoke([HumanMessage(content=prompt)])
           if verbose:
               print("[generate_rw_question] LLM generation completed successfully")
+      except LengthFinishReasonError as e:
+          if verbose:
+              print(f"[generate_rw_question] Error: LLM hit token limit during generation")
+              print(f"  Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}")
+              print(f"  Prompt tokens: {e.completion.usage.prompt_tokens if e.completion.usage else 'unknown'}")
+          raise ValueError(
+              f"LLM response exceeded token limit. Try using a model with higher limits or simplifying the prompt. "
+              f"Completion tokens: {e.completion.usage.completion_tokens if e.completion.usage else 'unknown'}"
+          ) from e
       except Exception as e:
           if verbose:
               print(f"[generate_rw_question] Error during LLM generation: {e}")
@@ -1191,7 +1692,7 @@ def main():
     print()
     
     # Generate questions
-    llm = ChatOpenAI(model=args.model, temperature=0.7)
+    llm = ChatOpenAI(model=args.model, temperature=0.7, max_tokens=8192)
     generated_questions = []
     
     for i in range(args.count):

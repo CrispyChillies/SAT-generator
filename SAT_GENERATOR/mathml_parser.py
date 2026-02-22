@@ -401,18 +401,42 @@ class MathMLParser:
         """
         Parse single (non-grouped) bar chart from HTML list structure.
         
-        Pattern:
+        **Differentiation from grouped bar chart:**
+        
+        SINGLE BAR CHART pattern:
         <ul>
           <li>The data for the N categories are as follows:
             <ul>
-              <li>category1: value1</li>
-              <li>category2: value2</li>
-              ...
+              <li>category1: value1 [unit]</li>  ← VALUE DIRECTLY after colon
+              <li>category2: value2 [unit]</li>
             </ul>
           </li>
         </ul>
         
-        Key difference from grouped: values are DIRECTLY after colon, no nested <ul>
+        GROUPED BAR CHART pattern:
+        <ul>
+          <li>For each data category, the following bars are shown:
+            <ul>
+              <li>group1</li>
+              <li>group2</li>
+            </ul>
+          </li>
+          <li>The data for the N categories are as follows:
+            <ul>
+              <li>category1:               ← Notice the NESTED <ul> after colon
+                <ul>
+                  <li>group1: value1</li>
+                  <li>group2: value2</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+        
+        Key differences:
+        1. Grouped has "For each data category, the following bars are shown" section
+        2. Grouped has nested <ul> tags after category name
+        3. Single has value DIRECTLY after colon (no nested structure)
         
         Returns:
             Dict with 'categories' and 'values' keys or None
@@ -453,9 +477,11 @@ class MathMLParser:
         li_items = re.findall(li_pattern, data_section, re.IGNORECASE)
         
         for item_text in li_items:
-            # Check if this item matches CATEGORY: NUMBER pattern
+            # Check if this item matches CATEGORY: NUMBER [UNIT] pattern
+            # Examples: "Gorner: 41.2 square kilometers" or "Item A: 1,252"
             # The key is that NUMBER is directly after colon (not nested in another tag)
-            match = re.match(r'^([^:]+):\s*([0-9,]+)\s*$', item_text.strip())
+            # Pattern allows optional unit/text after the number
+            match = re.match(r'^([^:]+):\s*([0-9,.]+)(?:\s+.*)?$', item_text.strip())
             if match:
                 category = match.group(1).strip()
                 value_str = match.group(2).strip()
