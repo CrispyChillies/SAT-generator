@@ -632,9 +632,8 @@ def _build_prompt_graph_multiple_choice(
     difficulty: str,
 ) -> str:
     """Prompt cho câu hỏi multiple-choice có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
-    choices_text = "\n".join(
-        f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
-    )
+    # Do not include "Choice A:/B:/..." prefixes — UI will display A/B/C/D
+    choices_text = "\n".join(original_choices)
     
     # Extract long_description_html for the prompt
     long_desc_html = graph_spec.get("long_description_html", "")
@@ -868,9 +867,8 @@ def _build_prompt_multiple_choice(
     difficulty: str,
 ) -> str:
     """Prompt cho multiple-choice: sinh question, explanation, 4 choices, và correct_answer_letter."""
-    choices_text = "\n".join(
-        f"Choice {letter}: {c}" for letter, c in zip(["A", "B", "C", "D"], original_choices)
-    )
+    # Do not include "Choice A:/B:/..." prefixes — UI will display A/B/C/D
+    choices_text = "\n".join(original_choices)
     return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter.
 
 STRICT rules:

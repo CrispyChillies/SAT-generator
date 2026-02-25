@@ -71,7 +71,8 @@ You have access to reasoning tools to help you analyze the text and choices. Use
 Be thorough and logical in your reasoning."""
 
     # Build user prompt
-    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{choice}" for choice in choices])
     
     user_prompt = f"""Please solve this SAT Reading & Writing question.
 

@@ -181,7 +181,8 @@ def compare_choices(paragraph: str, question: str, choices: List[str], skill: st
     Returns analysis identifying the best answer and explaining why others are wrong.
     """
     llm = _get_reasoning_llm()
-    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{choice}" for choice in choices])
     
     prompt = f"""You are solving an SAT Reading & Writing question.
 

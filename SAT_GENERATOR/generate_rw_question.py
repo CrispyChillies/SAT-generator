@@ -580,7 +580,8 @@ def _build_generation_prompt(
     reasoning_type = _infer_reasoning_type(skill, question, paragraph)
     logical_schema = _infer_logical_schema(skill, paragraph, choices)
     
-    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{c}" for c in choices])
     correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
     
     # Identify distractor patterns
@@ -688,7 +689,8 @@ def _build_table_generation_prompt(
     reasoning_type = _infer_reasoning_type(skill, question, paragraph)
     logical_schema = _infer_logical_schema(skill, paragraph, choices)
     
-    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{c}" for c in choices])
     correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
     
     # Format table structure for LLM
@@ -797,7 +799,8 @@ def _build_bar_chart_generation_prompt(
     reasoning_type = _infer_reasoning_type(skill, question, paragraph)
     logical_schema = _infer_logical_schema(skill, paragraph, choices)
     
-    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{c}" for c in choices])
     correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
     
     # Format graph structure for LLM
@@ -942,7 +945,8 @@ def _build_grouped_bar_chart_generation_prompt(
     reasoning_type = _infer_reasoning_type(skill, question, paragraph)
     logical_schema = _infer_logical_schema(skill, paragraph, choices)
     
-    choices_text = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(choices)])
+    # Do not include A., B., C., D. prefixes — UI handles labeling
+    choices_text = "\n".join([f"{c}" for c in choices])
     correct_choice = choices[ord(correct_letter) - ord('A')] if correct_letter in "ABCD" else choices[0]
     
     # Format graph structure for LLM

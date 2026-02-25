@@ -2,15 +2,57 @@
   "steps": [
     {
       "step_number": 1,
-      "function_name": "divide",
+      "function_name": "multiply",
       "params_meaning": [
         {
           "param": "a",
-          "meaning": "the total length in inches that needs to be converted"
+          "meaning": "a coefficient that scales the first variable in a multiplication"
         },
         {
           "param": "b",
-          "meaning": "the number of inches in one yard"
+          "meaning": "the second variable in a multiplication"
+        }
+      ]
+    },
+    {
+      "step_number": 2,
+      "function_name": "subtract",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the first value being subtracted in the operation"
+        },
+        {
+          "param": "b",
+          "meaning": "the second value being subtracted from the first value"
+        }
+      ]
+    },
+    {
+      "step_number": 3,
+      "function_name": "subtract",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the first value being subtracted in the operation"
+        },
+        {
+          "param": "b",
+          "meaning": "the second value being subtracted in the operation"
+        }
+      ]
+    },
+    {
+      "step_number": 4,
+      "function_name": "add",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the first value being added in the operation"
+        },
+        {
+          "param": "b",
+          "meaning": "the second value being added in the operation"
         }
       ]
     }
