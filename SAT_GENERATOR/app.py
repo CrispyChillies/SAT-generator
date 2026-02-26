@@ -135,6 +135,7 @@ def api_run_flow():
         out_dir=str(BASE_DIR),
         steps_json_path="steps_function_and_meaning.json",
         verbose=True,
+        use_hf_solver=True
     )
 
     # Chuẩn hóa để JSON (bỏ object không serialize được nếu có)

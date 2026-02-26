@@ -35,6 +35,13 @@ from agent import LangGraphMathAgent
 from sat_math_solver import solve_with_steps
 from mathml_parser import MathMLParser
 
+# HuggingFace solver (optional alternative to OpenAI)
+try:
+    from huggingface_math_solver import HuggingFaceMathSolver, solve_with_steps_hf
+    HF_AVAILABLE = True
+except ImportError:
+    HF_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Import modules for R&W flow
 # ---------------------------------------------------------------------------
@@ -113,6 +120,8 @@ def run_math_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4.1",
     verbose: bool = True,
+    use_hf_solver: bool = False,
+    hf_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Chạy luồng đầy đủ theo flow.md.
@@ -129,6 +138,8 @@ def run_math_flow(
         api_key: OpenAI API key. None = lấy từ OPENAI_API_KEY.
         model: Tên model cho LLM.
         verbose: In log chi tiết.
+        use_hf_solver: Nếu True, dùng HuggingFace solver thay vì OpenAI.
+        hf_api_key: HuggingFace API key (nếu dùng HF solver). None = lấy từ HF_API_KEY.
 
     Returns:
         Dict gồm:
@@ -138,15 +149,35 @@ def run_math_flow(
           - answer_result: Kết quả từ sat_math_solver (final_result, steps_detail, error, ...).
           - error: Lỗi tổng (nếu có).
     """
-    api_key = api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return {
-            "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
-            "steps_json_path": None,
-            "new_question_item": None,
-            "new_question_text": None,
-            "answer_result": None,
-        }
+    # Check API keys based on solver choice
+    if use_hf_solver:
+        if not HF_AVAILABLE:
+            return {
+                "error": "HuggingFace solver not available. Check huggingface_math_solver.py import.",
+                "steps_json_path": None,
+                "new_question_item": None,
+                "new_question_text": None,
+                "answer_result": None,
+            }
+        hf_api_key = hf_api_key or os.getenv("HF_API_KEY")
+        if not hf_api_key:
+            return {
+                "error": "Cần đặt HF_API_KEY trong môi trường hoặc truyền hf_api_key.",
+                "steps_json_path": None,
+                "new_question_item": None,
+                "new_question_text": None,
+                "answer_result": None,
+            }
+    else:
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {
+                "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
+                "steps_json_path": None,
+                "new_question_item": None,
+                "new_question_text": None,
+                "answer_result": None,
+            }
 
     out_dir = Path(out_dir) if out_dir else Path(".")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -195,16 +226,33 @@ def run_math_flow(
     # --- B: Agent sinh steps_function_and_meaning.json ---
     if verbose:
         print("\n" + "=" * 70)
-        print("B: Agent sinh steps_function_and_meaning.json")
+        solver_name = "HuggingFace Solver" if use_hf_solver else "LangGraph Agent"
+        print(f"B: {solver_name} sinh steps_function_and_meaning.json")
         print("=" * 70)
     try:
-        agent = LangGraphMathAgent(api_key=api_key, model=model, verbose=verbose)
-        trace = agent.solve(
-            question=question_text,
-            mathml_explanation=explanation,
-            correct_answer=correct_answer,
-            steps_json_path=str(steps_path),
-        )
+        if use_hf_solver:
+            # Use HuggingFace solver
+            agent = HuggingFaceMathSolver(
+                api_key=hf_api_key,
+                model="zai-org/GLM-Z1-9B-0414:featherless-ai",
+                verbose=verbose
+            )
+            trace = agent.solve(
+                question=question_text,
+                mathml_explanation=explanation,
+                correct_answer=correct_answer,
+                steps_json_path=str(steps_path),
+            )
+        else:
+            # Use original OpenAI-based LangGraph agent
+            agent = LangGraphMathAgent(api_key=api_key, model=model, verbose=verbose)
+            trace = agent.solve(
+                question=question_text,
+                mathml_explanation=explanation,
+                correct_answer=correct_answer,
+                steps_json_path=str(steps_path),
+            )
+        
         if trace.error:
             result_bag["error"] = f"Agent: {trace.error}"
             if verbose:
@@ -263,17 +311,32 @@ def run_math_flow(
     # --- D: Sinh đáp án cho câu hỏi mới (dựa vào steps JSON) ---
     if verbose:
         print("\n" + "=" * 70)
-        print("D: Sinh đáp án cho câu hỏi mới (dựa vào file JSON)")
+        solver_name = "HuggingFace Solver" if use_hf_solver else "sat_math_solver"
+        print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
         print("=" * 70)
     try:
-        answer_result = solve_with_steps(
-            question=new_question_text,
-            steps_path=str(steps_path),
-            api_key=api_key,
-            model=model,
-            parser=parser,
-            verbose=verbose,
-        )
+        if use_hf_solver:
+            # Use HuggingFace solver (one-shot reasoning, doesn't use steps JSON)
+            answer_result = solve_with_steps_hf(
+                question=new_question_text,
+                steps_path=str(steps_path),
+                new_correct_answer=new_correct_answer,
+                api_key=hf_api_key,
+                model="zai-org/GLM-Z1-9B-0414:featherless-ai",
+                parser=parser,
+                verbose=verbose,
+            )
+        else:
+            # Use original OpenAI-based solver
+            answer_result = solve_with_steps(
+                question=new_question_text,
+                steps_path=str(steps_path),
+                api_key=api_key,
+                model=model,
+                parser=parser,
+                verbose=verbose,
+            )
+        
         result_bag["answer_result"] = answer_result
         if answer_result.get("error"):
             result_bag["error"] = result_bag["error"] or ""
@@ -550,6 +613,8 @@ def run_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     verbose: bool = True,
+    use_hf_solver: bool = False,
+    hf_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Unified flow that automatically routes to Math or R&W generation based on question type.
@@ -561,6 +626,8 @@ def run_flow(
         api_key: OpenAI API key
         model: LLM model name
         verbose: Print detailed logs
+        use_hf_solver: Use HuggingFace solver instead of OpenAI (Math only)
+        hf_api_key: HuggingFace API key (if using HF solver)
     
     Returns:
         Dict with results (structure depends on question type)
@@ -591,6 +658,8 @@ def run_flow(
             api_key=api_key,
             model=model,
             verbose=verbose,
+            use_hf_solver=use_hf_solver,
+            hf_api_key=hf_api_key,
         )
 
 
@@ -605,6 +674,8 @@ def main():
     ap.add_argument("--out-dir", type=str, default=None, help="Thư mục ghi kết quả (mặc định: output/)")
     ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (Math questions only)")
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
+    ap.add_argument("--use-hf", action="store_true", help="Dùng HuggingFace solver thay vì OpenAI (chỉ cho Math questions)")
+    ap.add_argument("--hf-api-key", type=str, default=None, help="HuggingFace API key (hoặc dùng biến môi trường HF_API_KEY)")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
     args = ap.parse_args()
@@ -624,6 +695,8 @@ def main():
         out_dir=out_dir,
         model=args.model,
         verbose=not args.quiet,
+        use_hf_solver=args.use_hf,
+        hf_api_key=args.hf_api_key,
     )
 
     if args.save_result:

@@ -1,0 +1,25 @@
+{
+  "category": "Linear Functions and Equations",
+  "difficulty": "Medium",
+  "id": "aebbe2b7-2f25-40f4-8429-4181e9ce4d82",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "<math><mn>440</mn></math>",
+      "<math><mn>4040</mn></math>",
+      "<math><mn>4440</mn></math>",
+      "<math><mn>40440</mn></math>"
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "A multiple of <math><mn>30</mn></math> must be a multiple of <math><mn>10</mn></math> and <math><mn>3</mn></math>. So the units digit is <math><mn>0</mn></math>, and the sum of digits must be a multiple of <math><mn>3</mn></math>. Using only digits 0 and 4, the least such number has three 4's (sum <math><mn>12</mn></math>) and one 0 at the end: <math><mn>4440</mn></math>.",
+    "paragraph": null,
+    "question": "What is the least positive integer multiple of 30 that can be written with only the digits 0 and 4?"
+  },
+  "section": "Algebra",
+  "skill": "",
+  "subject": "Algebra",
+  "type": "multiple-choice"
+}
