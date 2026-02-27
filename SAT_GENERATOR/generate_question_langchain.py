@@ -808,8 +808,58 @@ def _build_prompt(
     section: str,
     q_type: str,
     difficulty: str,
+    creative_mode: bool = True,
 ) -> str:    
-    return f"""You are an SAT question writer. Task: take the sample question, explanation, and correct answer below and change ONLY the numerical values. Do NOT change any other content.
+    if creative_mode:
+        return f"""You are an SAT question writer. Task: Generate a NEW question that tests the SAME mathematical skill/concept as the sample, but with a DIFFERENT scenario and context.
+
+CRITICAL REQUIREMENTS:
+1. SAME SKILL: The new question must test the exact same mathematical skill, concept, or problem-solving technique as the sample
+2. DIFFERENT SCENARIO: Create a completely different real-world context, story, or scenario (e.g., if sample is about distance, use temperature, money, population, etc.)
+3. DIFFERENT NUMBERS: Use entirely different numerical values that make sense for your new scenario
+4. SAME FORMAT: Maintain the same HTML + MathML structure and formatting style
+5. SAME DIFFICULTY: Keep the same difficulty level ({difficulty})
+6. CONSISTENT OUTPUT: The new question, explanation, and correct_answer must all be logically consistent
+
+ANALYSIS INSTRUCTIONS:
+- First, identify what mathematical skill/concept the sample question tests (e.g., solving equations, word problems, algebraic manipulation, etc.)
+- Then create a NEW scenario that requires the SAME mathematical approach/skill to solve
+- Category: {category}. Section: {section}. Type: {q_type}. Difficulty: {difficulty}
+
+FORMAT REQUIREMENTS:
+- Use proper HTML tags and MathML format exactly like the sample
+- All mathematical expressions must be in <math> tags with proper MathML structure
+- Provide a clear, detailed explanation showing the solution steps  
+- The correct_answer must be in the same format as the sample (e.g., if sample has MathML, use MathML)
+
+Sample question (HTML + MathML) - ANALYZE the math skill being tested:
+---
+{original_question_html}
+---
+
+Sample explanation (HTML + MathML) - UNDERSTAND the problem-solving approach:
+---
+{original_explanation}
+---
+
+Sample correct answer (content of the right answer, HTML + MathML):
+---
+{original_correct_answer}
+---
+
+Return a JSON object with keys: question, explanation, correct_answer.
+- question: NEW question with DIFFERENT scenario testing the SAME skill, proper HTML+MathML format
+- explanation: Detailed explanation for YOUR new question, showing the solution steps clearly  
+- correct_answer: The correct answer for YOUR new question, in the same format as the sample (e.g., HTML/MathML string)
+
+EXAMPLE TRANSFORMATION:
+Sample: "Solve for x: 2x + 5 = 13"
+Your New Question: "Solve for y: 3y - 7 = 14" 
+(Both test: solving linear equations with one variable, but different equations)
+"""
+    else:
+        # Conservative mode: only change numbers
+        return f"""You are an SAT question writer. Task: take the sample question, explanation, and correct answer below and change ONLY the numerical values. Do NOT change any other content.
 
 STRICT rules:
 - Do NOT rewrite, paraphrase, or alter the wording. Keep every word, every tag, and every character exactly as in the sample except for numbers.
@@ -831,6 +881,8 @@ Sample explanation (HTML + MathML):
 Sample correct answer (content of the right choice, HTML + MathML):
 ---
 {original_correct_answer}
+---
+
 Return a JSON object with keys: question, explanation, correct_answer. Each value: same string as sample with only numbers substituted; numbers must be consistent across all three.
 """
 
@@ -857,6 +909,37 @@ def _get_correct_answer_letter(sample: Dict[str, Any]) -> Optional[str]:
     return letter if letter in ("A", "B", "C", "D") else None
 
 
+def _clean_reasoning_response(response_text: str) -> str:
+    """
+    Clean response from reasoning models that output <think>...</think> tags.
+    
+    Args:
+        response_text: Raw response from LLM that may contain thinking tags and code blocks
+    
+    Returns:
+        Clean JSON string ready for parsing
+    """
+    # Ensure we have a string (handle LangChain AIMessage.content which might be typed as Union[str, List])
+    if not isinstance(response_text, str):
+        response_text = str(response_text)
+    
+    # Remove <think>...</think> tags and their content
+    cleaned = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Extract JSON from code blocks (```json ... ```)
+    json_match = re.search(r'```json\s*(.+?)\s*```', cleaned, flags=re.DOTALL)
+    if json_match:
+        return json_match.group(1).strip()
+    
+    # Extract JSON from code blocks (``` ... ```)
+    code_block_match = re.search(r'```\s*(.+?)\s*```', cleaned, flags=re.DOTALL)
+    if code_block_match:
+        return code_block_match.group(1).strip()
+    
+    # No code blocks, just clean whitespace
+    return cleaned.strip()
+
+
 def _build_prompt_multiple_choice(
     original_question_html: str,
     original_explanation: str,
@@ -865,11 +948,64 @@ def _build_prompt_multiple_choice(
     category: str,
     section: str,
     difficulty: str,
+    creative_mode: bool = True,
 ) -> str:
     """Prompt cho multiple-choice: sinh question, explanation, 4 choices, và correct_answer_letter."""
     # Do not include "Choice A:/B:/..." prefixes — UI will display A/B/C/D
     choices_text = "\n".join(original_choices)
-    return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter.
+    
+    if creative_mode:
+        return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: Generate a NEW question that tests the SAME mathematical skill/concept as the sample, but with a DIFFERENT scenario and context.
+
+CRITICAL REQUIREMENTS:
+1. SAME SKILL: The new question must test the exact same mathematical skill, concept, or problem-solving technique as the sample
+2. DIFFERENT SCENARIO: Create a completely different real-world context, story, or scenario (e.g., if sample is about cars, use books, students, temperature, etc.)
+3. DIFFERENT NUMBERS: Use entirely different numerical values that make sense for your new scenario
+4. SAME FORMAT: Maintain the same HTML + MathML structure and formatting style
+5. SAME DIFFICULTY: Keep the same difficulty level ({difficulty})
+6. EXACTLY 4 CHOICES: Provide exactly 4 answer choices (A, B, C, D) in order
+
+ANALYSIS INSTRUCTIONS:
+- First, identify what mathematical skill/concept the sample question tests (e.g., linear equations, percentages, ratios, algebraic manipulation, geometry theorems, etc.)
+- Then create a NEW scenario that requires the SAME mathematical approach/skill to solve
+- Ensure your new question would appear in the same category: {category}, Section: {section}
+
+FORMAT REQUIREMENTS:
+- Use proper HTML tags and MathML format exactly like the sample
+- All mathematical expressions must be in <math> tags with proper MathML structure
+- Keep clean, SAT-style professional wording
+- Provide a clear, detailed explanation showing the solution steps
+- Make sure the explanation teaches the concept, not just shows calculations
+
+Sample question (HTML + MathML) - ANALYZE the math skill being tested:
+---
+{original_question_html}
+---
+
+Sample explanation (HTML + MathML) - UNDERSTAND the problem-solving approach:
+---
+{original_explanation}
+---
+
+Sample 4 choices (correct answer is {correct_letter}):
+---
+{choices_text}
+---
+
+Return a JSON object with keys: question, explanation, choices, correct_answer_letter.
+- question: NEW question with DIFFERENT scenario testing the SAME skill, proper HTML+MathML format
+- explanation: Detailed explanation for YOUR new question, showing the solution steps clearly
+- choices: list of exactly 4 strings in order A, B, C, D (plausible distractors based on common mistakes)
+- correct_answer_letter: one of "A", "B", "C", "D" (the correct answer for YOUR new question)
+
+EXAMPLE TRANSFORMATION:
+Sample: "A car travels 120 miles in 2 hours. What is its average speed?"
+Your New Question: "A student reads 45 pages in 1.5 hours. What is the student's reading rate in pages per hour?"
+(Both test: rate = distance/time concept, but different contexts)
+"""
+    else:
+        # Conservative mode: only change numbers
+        return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: change ONLY the numerical values in the sample below. Do NOT change wording, structure, or order. Output exactly 4 choices (A, B, C, D) and the correct answer letter.
 
 STRICT rules:
 - Do NOT rewrite or paraphrase. Keep every word and tag except numbers.
@@ -904,23 +1040,61 @@ Return a JSON object with keys: question, explanation, choices, correct_answer_l
 def generate_new_question(
     sample: Dict[str, Any],
     llm: Optional[ChatOpenAI] = None,
+    use_hf: bool = False,
+    hf_api_key: Optional[str] = None,
+    hf_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
+    hf_base_url: str = "https://router.huggingface.co/v1",
+    api_key: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    creative_mode: bool = True,
 ) -> Dict[str, Any]:
     """
     Sinh câu hỏi mới, explanation và đáp án từ câu mẫu (cùng category, đúng format, chỉ đổi số liệu).
 
     Args:
         sample: Một item từ questions_practice_test.json (có id, category, question, explanation, correct_answer, ...).
-        llm: LangChain ChatOpenAI. Nếu None sẽ tạo mới từ OPENAI_API_KEY.
+        llm: LangChain ChatOpenAI. Nếu None sẽ tạo mới từ API keys.
+        use_hf: Nếu True, dùng HuggingFace model thay vì OpenAI.
+        hf_api_key: HuggingFace API key (hoặc dùng HF_API_KEY env var).
+        hf_model: Tên model HuggingFace (mặc định: GLM-Z1-9B via router inference).
+        hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
+        api_key: OpenAI API key (hoặc dùng OPENAI_API_KEY env var).
+        model: Tên model OpenAI (mặc định: gpt-4o-mini).
+        creative_mode: Nếu True (mặc định), tạo câu hỏi mới với scenario khác nhưng test cùng skill.
+                      Nếu False, chỉ thay đổi số liệu, giữ nguyên context.
 
     Returns:
         Câu hỏi mới dạng dict, cùng cấu trúc với questions_practice_test.json,
         question.question, question.explanation, question.correct_answer đều được sinh; choices có thể null.
     """
     if llm is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền llm.")
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+        if use_hf:
+            # Use HuggingFace model via OpenAI-compatible API
+            hf_key = hf_api_key or os.getenv("HF_API_KEY")
+            if not hf_key:
+                raise ValueError("Cần đặt HF_API_KEY trong môi trường hoặc truyền hf_api_key.")
+            
+            llm = ChatOpenAI(
+                model=hf_model,
+                temperature=0.7 if creative_mode else 0.3,
+                api_key=hf_key,
+                base_url=hf_base_url,
+            )
+            mode_text = "creative" if creative_mode else "conservative"
+            print(f"✓ Using HuggingFace model: {hf_model} ({mode_text} mode)")
+        else:
+            # Use OpenAI model
+            openai_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
+            
+            llm = ChatOpenAI(
+                model=model,
+                temperature=0.7 if creative_mode else 0.3,
+                api_key=openai_key,
+            )
+            mode_text = "creative" if creative_mode else "conservative"
+            print(f"✓ Using OpenAI model: {model} ({mode_text} mode)")
 
     category = sample.get("category", "Algebra")
     section = sample.get("section", "Math")
@@ -975,10 +1149,17 @@ def generate_new_question(
                 difficulty,
             )
             
-            structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
-            result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(
-                [HumanMessage(content=prompt_text)]
-            )
+            # For HuggingFace models, manually parse to handle reasoning responses
+            if use_hf:
+                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
+                print(raw_response)
+                cleaned_json = _clean_reasoning_response(raw_response.content)
+                result_graph = GeneratedGraphQuestionContent.model_validate_json(cleaned_json)
+            else:
+                structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
+                result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(
+                    [HumanMessage(content=prompt_text)]
+                )
             
             # Validate kết quả
             new_choices = result_graph.choices or []
@@ -1087,11 +1268,18 @@ def generate_new_question(
                 category,
                 section,
                 difficulty,
+                creative_mode=creative_mode,
             )
-            structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
-            result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(
-                [HumanMessage(content=prompt_text)]
-            )
+            # For HuggingFace models, manually parse to handle reasoning responses
+            if use_hf:
+                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
+                cleaned_json = _clean_reasoning_response(raw_response.content)
+                result_mc = GeneratedMultipleChoiceContent.model_validate_json(cleaned_json)
+            else:
+                structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
+                result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(
+                    [HumanMessage(content=prompt_text)]
+                )
             new_question_text = (result_mc.question or "").strip()
             new_explanation = (result_mc.explanation or "").strip()
             new_choices = result_mc.choices or []
@@ -1146,10 +1334,16 @@ def generate_new_question(
                 difficulty,
             )
             
-            structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
-            result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(
-                [HumanMessage(content=prompt_text)]
-            )
+            # For HuggingFace models, manually parse to handle reasoning responses
+            if use_hf:
+                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
+                cleaned_json = _clean_reasoning_response(raw_response.content)
+                result_free_response = GeneratedGraphFreeResponseContent.model_validate_json(cleaned_json)
+            else:
+                structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
+                result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(
+                    [HumanMessage(content=prompt_text)]
+                )
             
             # Validate kết quả
             new_question_text_no_svg = (result_free_response.question_text or "").strip()
@@ -1223,11 +1417,18 @@ def generate_new_question(
                 section,
                 q_type,
                 difficulty,
+                creative_mode=creative_mode,
             )
-            structured_llm = llm.with_structured_output(GeneratedQuestionContent)
-            result: GeneratedQuestionContent = structured_llm.invoke(
-                [HumanMessage(content=prompt_text)]
-            )
+            # For HuggingFace models, manually parse to handle reasoning responses
+            if use_hf:
+                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
+                cleaned_json = _clean_reasoning_response(raw_response.content)
+                result = GeneratedQuestionContent.model_validate_json(cleaned_json)
+            else:
+                structured_llm = llm.with_structured_output(GeneratedQuestionContent)
+                result: GeneratedQuestionContent = structured_llm.invoke(
+                    [HumanMessage(content=prompt_text)]
+                )
             new_question_text = (result.question or "").strip()
             new_explanation = (result.explanation or "").strip()
             new_correct_answer = (result.correct_answer or "").strip()
@@ -1256,8 +1457,16 @@ Sample:
 ---
 
 Return only the new question string (same format, numbers changed)."""
-        QuestionOnlyModel = llm.with_structured_output(QuestionOnly)
-        res = QuestionOnlyModel.invoke([HumanMessage(content=prompt_question_only)])
+        
+        # For HuggingFace models, manually parse to handle reasoning responses
+        if use_hf:
+            raw_response = llm.invoke([HumanMessage(content=prompt_question_only)])
+            cleaned_json = _clean_reasoning_response(raw_response.content)
+            res = QuestionOnly.model_validate_json(cleaned_json)
+        else:
+            QuestionOnlyModel = llm.with_structured_output(QuestionOnly)
+            res = QuestionOnlyModel.invoke([HumanMessage(content=prompt_question_only)])
+        
         new_question_text = (res.question or "").strip()
         if not new_question_text:
             raise ValueError("LLM không trả về nội dung câu hỏi.")

@@ -121,8 +121,12 @@ def run_math_flow(
     model: str = "gpt-4.1",
     verbose: bool = True,
     use_hf_solver: bool = False,
+    use_hf_generator: bool = False,
     hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
+    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
+    hf_base_url: str = "https://router.huggingface.co/v1",
+    creative_mode: bool = True,
 ) -> Dict[str, Any]:
     """
     Chạy luồng đầy đủ theo flow.md.
@@ -140,7 +144,10 @@ def run_math_flow(
         model: Tên model cho LLM.
         verbose: In log chi tiết.
         use_hf_solver: Nếu True, dùng HuggingFace solver thay vì OpenAI.
+        use_hf_generator: Nếu True, dùng HuggingFace model cho việc generate câu hỏi mới.
         hf_api_key: HuggingFace API key (nếu dùng HF solver). None = lấy từ HF_API_KEY.
+        hf_generator_model: Tên model HuggingFace cho việc generate câu hỏi (mặc định: GLM-Z1-9B via router).
+        hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
 
     Returns:
         Dict gồm:
@@ -270,10 +277,20 @@ def run_math_flow(
     # --- C: Gen câu hỏi mới + explanation + đáp án ---
     if verbose:
         print("\n" + "=" * 70)
-        print("C: Gen câu hỏi mới, explanation và đáp án")
+        generator_name = "HuggingFace Generator" if use_hf_generator else "OpenAI Generator"
+        print(f"C: {generator_name} sinh câu hỏi mới, explanation và đáp án")
         print("=" * 70)
     try:
-        new_question_item = generate_new_question(sample)
+        new_question_item = generate_new_question(
+            sample,
+            use_hf=use_hf_generator,
+            hf_api_key=hf_api_key,
+            hf_model=hf_generator_model,
+            hf_base_url=hf_base_url,
+            api_key=api_key,
+            model=model,
+            creative_mode=creative_mode,
+        )
         result_bag["new_question_item"] = new_question_item
         new_q_block = new_question_item.get("question") or {}
         new_question_text = (new_q_block.get("question") or "").strip()
@@ -616,8 +633,12 @@ def run_flow(
     model: str = "gpt-4o-mini",
     verbose: bool = True,
     use_hf_solver: bool = False,
+    use_hf_generator: bool = False,
     hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
+    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
+    hf_base_url: str = "https://router.huggingface.co/v1",
+    creative_mode: bool = True,
 ) -> Dict[str, Any]:
     """
     Unified flow that automatically routes to Math or R&W generation based on question type.
@@ -630,7 +651,11 @@ def run_flow(
         model: LLM model name
         verbose: Print detailed logs
         use_hf_solver: Use HuggingFace solver instead of OpenAI (Math only)
-        hf_api_key: HuggingFace API key (if using HF solver)
+        use_hf_generator: Use HuggingFace model for question generation
+        hf_api_key: HuggingFace API key (if using HF solver or generator)
+        hf_generator_model: HuggingFace model for question generation (default: GLM-Z1-9B via router)
+        hf_base_url: Base URL for HuggingFace API (default: router inference)
+        creative_mode: If True, generate new scenarios testing same skill. If False, only change numbers.
     
     Returns:
         Dict with results (structure depends on question type)
@@ -662,8 +687,10 @@ def run_flow(
             model=model,
             verbose=verbose,
             use_hf_solver=use_hf_solver,
+            use_hf_generator=use_hf_generator,
             hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
+            hf_generator_model=hf_generator_model,            hf_base_url=hf_base_url,            creative_mode=creative_mode,
         )
 
 
@@ -679,8 +706,11 @@ def main():
     ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (Math questions only)")
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
     ap.add_argument("--use-hf", action="store_true", help="Dùng HuggingFace solver thay vì OpenAI (chỉ cho Math questions)")
+    ap.add_argument("--use-hf-generator", action="store_true", help="Dùng HuggingFace model cho việc generate câu hỏi mới (cả Math và R&W)")
+    ap.add_argument("--hf-generator-model", type=str, default="zai-org/GLM-Z1-9B-0414:featherless-ai", help="Tên model HuggingFace cho việc generate câu hỏi")
     ap.add_argument("--hf-api-key", type=str, default=None, help="HuggingFace API key (hoặc dùng biến môi trường HF_API_KEY)")
     ap.add_argument("--open-ai-api-key", type=str, default=None, help="OpenAI API key (hoặc dùng biến môi trường OPENAI_API_KEY)")
+    ap.add_argument("--conservative-mode", action="store_true", help="Chỉ thay đổi số liệu, giữ nguyên context (mặc định: tạo scenario mới với cùng skill)")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
     args = ap.parse_args()
@@ -701,8 +731,11 @@ def main():
         model=args.model,
         verbose=not args.quiet,
         use_hf_solver=args.use_hf,
+        use_hf_generator=args.use_hf_generator,
         hf_api_key=args.hf_api_key,
         open_ai_api_key=args.open_ai_api_key,
+        hf_generator_model=args.hf_generator_model,
+        creative_mode=not args.conservative_mode,
     )
 
     if args.save_result:
