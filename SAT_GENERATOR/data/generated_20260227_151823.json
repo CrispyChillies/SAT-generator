@@ -1,0 +1,20 @@
+{
+  "category": "Polynomial Functions and Operations",
+  "difficulty": "Medium",
+  "id": "b968ac85-fa13-4145-95f9-0a7f0f6816a5",
+  "question": {
+    "choices": [
+      "24 + 27i",
+      "12 + 20i",
+      "18 + 19i",
+      "30 + 15i"
+    ],
+    "correct_answer": [
+      "A"
+    ],
+    "explanation": "To evaluate <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>)</mo><mn>8</mn><mo>&#x2212;</mo><mn>5</mn><mi>i</mi></math>, first distribute <math><mn>8</mn></math> into the parentheses: <math><mn>3</mn><mo>×</mo><mn>8</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>×</mo><mn>8</mn></math>. This results in <math><mn>24</mn><mo>+</mo><mn>32</mi>i</math>. Next, combine with <math><mo>&#x2212;</mo><mn>5</mn><mi>i</mi></math>: <math><mn>24</mn><mo>+</mo><mn>32</mn><mi>i</mi><mo>&#x2212;</mo><mn>5</mn><mi>i</mi><mo>=</mo><mn>24</mn><mo>+</mo><mn>27</mn><mi>i</mi></math>. Thus, the final answer is <math><mn>24</mn><mo>+</mo><mn>27</mn><mi>i</mi></math>.",
+    "question": "Evaluate <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>)</mo><mn>8</mn><mo>&#x2212;</mo><mn>5</mn><mi>i</mi></math>."
+  },
+  "section": "Algebra",
+  "skill": ""
+}

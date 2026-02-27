@@ -91,6 +91,156 @@ def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Helper functions for Math flow
+# ---------------------------------------------------------------------------
+
+def generate_distracting_choices(
+    question: str,
+    correct_answer: Any,
+    api_key: str,
+    model: str = "gpt-4o-mini",
+    verbose: bool = False
+) -> list:
+    """
+    Generate 3 distracting choices for a math question given the correct answer.
+    
+    Args:
+        question: The question text
+        correct_answer: The correct answer
+        api_key: OpenAI API key
+        model: LLM model name
+        verbose: Print detailed logs
+    
+    Returns:
+        List of 3 distracting choices (wrong answers that look plausible)
+    """
+    from openai import OpenAI
+    
+    client = OpenAI(api_key=api_key)
+    
+    prompt = f"""You are helping create a multiple-choice SAT math question.
+
+Question: {question}
+
+Correct Answer: {correct_answer}
+
+Generate 3 plausible but INCORRECT answer choices that:
+1. Are mathematically distinct from the correct answer
+2. Represent common mistakes or misconceptions
+3. Are in the same format as the correct answer
+4. Look realistic and challenging for students
+
+Provide ONLY 3 choices, one per line, with no labels or explanations."""
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an expert SAT math question writer."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        content = response.choices[0].message.content.strip()
+        distractors = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        # Take first 3 non-empty lines
+        distractors = distractors[:3]
+        
+        # Pad with generic distractors if needed
+        while len(distractors) < 3:
+            distractors.append(f"Option {len(distractors) + 1}")
+        
+        if verbose:
+            print(f"Generated {len(distractors)} distracting choices")
+        
+        return distractors
+    
+    except Exception as e:
+        if verbose:
+            print(f"⚠️ Error generating distractors: {e}")
+        # Return generic distractors as fallback
+        return ["Option A", "Option B", "Option C"]
+
+
+def generate_short_explanation(
+    question: str,
+    correct_answer: Any,
+    sample_explanation: str,
+    api_key: str,
+    model: str = "gpt-4o-mini",
+    verbose: bool = False
+) -> str:
+    """
+    Generate a short explanation for the math question solution.
+    
+    Args:
+        question: The question text
+        correct_answer: The correct answer
+        sample_explanation: Example explanation from original question for style reference
+        api_key: OpenAI API key
+        model: LLM model name
+        verbose: Print detailed logs
+    
+    Returns:
+        Short explanation text (similar to sample format)
+    """
+    from openai import OpenAI
+    
+    client = OpenAI(api_key=api_key)
+    
+    prompt = f"""You are writing a concise explanation for an SAT math question.
+
+Question: {question}
+
+Correct Answer: {correct_answer}
+
+Example explanation style (from a similar question):
+{sample_explanation}
+
+IMPORTANT - MathML Formatting Rules:
+1. Wrap ALL mathematical expressions in <math>...</math> tags
+2. Use <mn>number</mn> for numbers: <math><mn>5</mn></math>
+3. Use <mi>variable</mi> for variables: <math><mi>x</mi></math>
+4. Use <mo>operator</mo> for operators: <math><mn>3</mn><mo>+</mo><mn>4</mn></math>
+5. For fractions: <math><mfrac><mn>numerator</mn><mn>denominator</mn></mfrac></math>
+6. Match the exact MathML style shown in the example above
+
+Examples of correct MathML:
+- "The value is <math><mn>42</mn></math>."
+- "Solve for <math><mi>x</mi></math>: <math><mi>x</mi><mo>=</mo><mn>7</mn></math>"
+- "Calculate <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mo>)</mo><mo>×</mo><mn>2</mn><mo>=</mo><mn>14</mn></math>"
+
+Write a SHORT, clear explanation (2-4 sentences) showing the key steps to solve this problem.
+Wrap ALL numbers, variables, and mathematical operations in proper MathML tags as shown above."""
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an expert SAT math tutor. Write clear, concise explanations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1200
+        )
+        
+        explanation = response.choices[0].message.content.strip()
+        
+        if verbose:
+            print(f"Generated explanation ({len(explanation)} chars)")
+        
+        return explanation
+    
+    except Exception as e:
+        if verbose:
+            print(f"⚠️ Error generating explanation: {e}")
+        return f"The correct answer is {correct_answer}."
+
+
+# ---------------------------------------------------------------------------
 # Question type detection
 # ---------------------------------------------------------------------------
 
@@ -235,7 +385,7 @@ def run_math_flow(
             # Use HuggingFace solver
             agent = HuggingFaceMathSolver(
                 api_key=hf_api_key,
-                openai_api_key=open_ai_api_key, 
+                openai_api_key=open_ai_api_key or os.getenv("OPENAI_API_KEY"), 
                 model="zai-org/GLM-Z1-9B-0414:featherless-ai",
                 verbose=verbose
             )
@@ -267,42 +417,18 @@ def run_math_flow(
             traceback.print_exc()
         return result_bag
 
-    # --- C: Gen câu hỏi mới + explanation + đáp án ---
+    # --- C: Gen câu hỏi mới (question only, no choices/explanation yet) ---
     if verbose:
         print("\n" + "=" * 70)
-        print("C: Gen câu hỏi mới, explanation và đáp án")
+        print("C: Gen câu hỏi mới")
         print("=" * 70)
     try:
         new_question_item = generate_new_question(sample)
-        result_bag["new_question_item"] = new_question_item
         new_q_block = new_question_item.get("question") or {}
         new_question_text = (new_q_block.get("question") or "").strip()
-        new_explanation = (new_q_block.get("explanation") or "").strip()
-        new_correct_answer = new_q_block.get("correct_answer")
-        new_choices = new_q_block.get("choices") or []
-        result_bag["new_question_text"] = new_question_text
+        
         if verbose and new_question_text:
             print("Câu hỏi mới (đoạn đầu):", new_question_text[:200] + "..." if len(new_question_text) > 200 else new_question_text)
-        if verbose and new_choices:
-            print("4 choices (multiple-choice):", len(new_choices), "đáp án")
-        if verbose and new_explanation:
-            print("Explanation (đoạn đầu):", new_explanation[:200] + "..." if len(new_explanation) > 200 else new_explanation)
-        if verbose and new_correct_answer is not None:
-            if isinstance(new_correct_answer, (list, tuple)) and new_correct_answer:
-                letter = new_correct_answer[0]
-                print("Đáp án đúng (correct_answer):", letter, end="")
-                if new_choices and letter in ("A", "B", "C", "D"):
-                    idx = ["A", "B", "C", "D"].index(letter)
-                    if idx < len(new_choices):
-                        content = (new_choices[idx] or "").strip()
-                        print(" →", content[:80] + "..." if len(content) > 80 else content)
-                    else:
-                        print()
-                else:
-                    print()
-            else:
-                s = str(new_correct_answer).strip()
-                print("Đáp án (correct_answer):", s[:150] + "..." if len(s) > 150 else s)
     except Exception as e:
         result_bag["error"] = f"Gen câu hỏi: {e}"
         if verbose:
@@ -317,13 +443,17 @@ def run_math_flow(
         print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
         print("=" * 70)
     try:
+        # Get the effective API key for later use
+        effective_api_key = api_key or os.getenv("OPENAI_API_KEY")
+        
         if use_hf_solver:
             # Use HuggingFace solver (one-shot reasoning, doesn't use steps JSON)
             answer_result = solve_with_steps_hf(
                 question=new_question_text,
                 steps_path=str(steps_path),
-                new_correct_answer=new_correct_answer,
+                new_correct_answer=None,  # No expected answer yet
                 api_key=hf_api_key,
+                openai_api_key=open_ai_api_key or os.getenv("OPENAI_API_KEY"),
                 model="zai-org/GLM-Z1-9B-0414:featherless-ai",
                 parser=parser,
                 verbose=verbose,
@@ -339,19 +469,117 @@ def run_math_flow(
                 verbose=verbose,
             )
         
-        result_bag["answer_result"] = answer_result
         if answer_result.get("error"):
-            result_bag["error"] = result_bag["error"] or ""
-            if result_bag["error"]:
-                result_bag["error"] += "; "
-            result_bag["error"] += f"Sinh đáp án: {answer_result['error']}"
-        elif verbose:
-            print("Final result (câu mới):", answer_result.get("final_result"))
+            result_bag["error"] = f"Sinh đáp án: {answer_result['error']}"
+            if verbose:
+                print(f"⚠️ Error: {result_bag['error']}")
+            return result_bag
+        
+        computed_answer = answer_result.get("final_result")
+        if computed_answer is None:
+            result_bag["error"] = "Solver không trả về đáp án"
+            return result_bag
+        
+        if verbose:
+            print(f"✓ Computed answer: {computed_answer}")
+    
     except Exception as e:
-        result_bag["error"] = (result_bag["error"] or "") + f"; Sinh đáp án: {e}"
+        result_bag["error"] = f"Sinh đáp án: {e}"
         if verbose:
             import traceback
             traceback.print_exc()
+        return result_bag
+    
+    # --- E: Generate distracting choices ---
+    if verbose:
+        print("\n" + "=" * 70)
+        print("E: Generate distracting choices")
+        print("=" * 70)
+    
+    try:
+        distractors = generate_distracting_choices(
+            question=new_question_text,
+            correct_answer=computed_answer,
+            api_key=effective_api_key,
+            model=model,
+            verbose=verbose
+        )
+        
+        # Combine correct answer with distractors and shuffle
+        import random
+        all_choices = [str(computed_answer)] + distractors
+        random.shuffle(all_choices)
+        
+        # Find which position has the correct answer
+        correct_letter_idx = all_choices.index(str(computed_answer))
+        correct_letter = CHOICE_LETTERS[correct_letter_idx]
+        
+        if verbose:
+            print(f"✓ Generated 4 choices, correct answer is {correct_letter}")
+            for i, choice in enumerate(all_choices):
+                marker = " ← correct" if i == correct_letter_idx else ""
+                print(f"  {CHOICE_LETTERS[i]}: {choice}{marker}")
+    
+    except Exception as e:
+        result_bag["error"] = (result_bag["error"] or "") + f"; Gen choices: {e}"
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return result_bag
+    
+    # --- F: Generate short explanation ---
+    if verbose:
+        print("\n" + "=" * 70)
+        print("F: Generate short explanation")
+        print("=" * 70)
+    
+    try:
+        # Get sample explanation for style reference
+        q_block = sample.get("question") or {}
+        sample_explanation = (q_block.get("explanation") or "").strip()
+        
+        new_explanation = generate_short_explanation(
+            question=new_question_text,
+            correct_answer=computed_answer,
+            sample_explanation=sample_explanation,
+            api_key=effective_api_key,
+            model=model,
+            verbose=verbose
+        )
+        
+        if verbose:
+            print(f"✓ Generated explanation: {new_explanation[:150]}..." if len(new_explanation) > 150 else f"✓ Generated explanation: {new_explanation}")
+    
+    except Exception as e:
+        result_bag["error"] = (result_bag["error"] or "") + f"; Gen explanation: {e}"
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return result_bag
+    
+    # --- Package final result ---
+    final_question_item = {
+        "id": new_question_item.get("id"),
+        "section": new_question_item.get("section"),
+        "skill": new_question_item.get("skill"),
+        "category": new_question_item.get("category"),
+        "difficulty": new_question_item.get("difficulty"),
+        "question": {
+            "question": new_question_text,
+            "choices": all_choices,
+            "correct_answer": [correct_letter],
+            "explanation": new_explanation
+        }
+    }
+    
+    result_bag["new_question_item"] = final_question_item
+    result_bag["new_question_text"] = new_question_text
+    result_bag["answer_result"] = {
+        "final_result": computed_answer,
+        "correct_choice_letter": correct_letter,
+        "all_choices": all_choices,
+        "explanation": new_explanation
+    }
 
     return result_bag
 

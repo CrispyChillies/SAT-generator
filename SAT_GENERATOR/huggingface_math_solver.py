@@ -638,6 +638,7 @@ def solve_with_steps_hf(
     *,
     new_correct_answer: Optional[Any] = None,
     api_key: Optional[str] = None,
+    openai_api_key: Optional[str] = None,
     model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
     parser: Optional[MathMLParser] = None,
     verbose: bool = False,
@@ -656,6 +657,7 @@ def solve_with_steps_hf(
         steps_path: Path to save steps JSON (optional, will create minimal format)
         new_correct_answer: Expected correct answer for verification (optional)
         api_key: HuggingFace API key (or use HF_API_KEY env var)
+        openai_api_key: OpenAI API key for ChatGPT verification (or use OPENAI_API_KEY env var)
         model: Model name
         parser: MathMLParser to convert question to text
         verbose: Log details
@@ -687,6 +689,7 @@ def solve_with_steps_hf(
         # Initialize solver
         solver = HuggingFaceMathSolver(
             api_key=api_key,
+            openai_api_key=openai_api_key,
             model=model,
             verbose=verbose
         )
