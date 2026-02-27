@@ -94,6 +94,74 @@ def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
 # Helper functions for Math flow
 # ---------------------------------------------------------------------------
 
+def extract_solving_method(trace: Any, verbose: bool = False) -> str:
+    """
+    Extract the solving method/approach from the execution trace.
+    
+    Args:
+        trace: ExecutionTrace from solver
+        verbose: Print detailed logs
+    
+    Returns:
+        String describing the solving method/approach
+    """
+    try:
+        # Strategy 1: Look for explicit "Solving Method/Approach" section in response
+        if hasattr(trace, 'steps') and trace.steps:
+            for step in trace.steps:
+                if hasattr(step, 'thought') and step.thought:
+                    # Search for the structured "Solving Method/Approach" section
+                    import re
+                    method_match = re.search(
+                        r'\*\*Solving Method[:/]Approach[:\*]*\*?\*?\s*(.+?)(?:\*\*|$)',
+                        step.thought,
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    
+                    if method_match:
+                        method_text = method_match.group(1).strip()
+                        # Clean up - remove "Step-by-Step Solution" marker if present
+                        method_text = re.sub(r'Step-by-Step Solution.*', '', method_text, flags=re.IGNORECASE | re.DOTALL)
+                        method_text = method_text.strip()
+                        
+                        if method_text and len(method_text) > 20:  # Ensure it's substantial
+                            if verbose:
+                                print(f"✓ Extracted solving method from structured section ({len(method_text)} chars)")
+                            return method_text
+        
+        # Strategy 2: Extract first few meaningful lines (fallback)
+        if hasattr(trace, 'steps') and trace.steps:
+            method_parts = []
+            
+            for step in trace.steps:
+                if hasattr(step, 'thought') and step.thought:
+                    thought_lines = step.thought.strip().split('\n')
+                    for line in thought_lines[:15]:
+                        if line.strip() and any(keyword in line.lower() for keyword in 
+                               ['method', 'approach', 'strategy', 'use', 'apply', 'theorem', 'formula', 
+                                'identify', 'calculate', 'solve for', 'given', 'find']):
+                            method_parts.append(line.strip())
+                    
+                    if method_parts:
+                        break
+            
+            if method_parts:
+                solving_method = '\n'.join(method_parts[:6])  # Limit to 6 key lines
+                if verbose:
+                    print(f"✓ Extracted solving method from thought patterns ({len(solving_method)} chars)")
+                return solving_method
+        
+        # Fallback: use general description
+        if verbose:
+            print("⚠️ Could not extract specific solving method, using fallback")
+        return "Apply the same mathematical approach as the original problem."
+    
+    except Exception as e:
+        if verbose:
+            print(f"⚠️ Error extracting solving method: {e}")
+        return "Apply the same mathematical approach as the original problem."
+
+
 def generate_distracting_choices(
     question: str,
     correct_answer: Any,
@@ -371,6 +439,7 @@ def run_math_flow(
         "new_question_item": None,
         "new_question_text": None,
         "answer_result": None,
+        "solving_method": None,  # Store solving method from step B
         "error": None,
     }
 
@@ -410,6 +479,15 @@ def run_math_flow(
             if verbose:
                 print("Agent error:", trace.error)
             return result_bag
+        
+        # Extract solving method from trace
+        solving_method = extract_solving_method(trace, verbose=verbose)
+        result_bag["solving_method"] = solving_method
+        
+        if verbose:
+            print(f"\n📋 Extracted solving method:")
+            print(f"  {solving_method[:200]}..." if len(solving_method) > 200 else f"  {solving_method}")
+    
     except Exception as e:
         result_bag["error"] = f"Agent: {e}"
         if verbose:
@@ -436,20 +514,34 @@ def run_math_flow(
             traceback.print_exc()
         return result_bag
 
-    # --- D: Sinh đáp án cho câu hỏi mới (dựa vào steps JSON) ---
+    # --- D: Sinh đáp án cho câu hỏi mới (áp dụng phương pháp từ B) ---
     if verbose:
         print("\n" + "=" * 70)
         solver_name = "HuggingFace Solver" if use_hf_solver else "sat_math_solver"
-        print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
+        print(f"D: {solver_name} áp dụng phương pháp giải từ bước B")
         print("=" * 70)
     try:
         # Get the effective API key for later use
         effective_api_key = api_key or os.getenv("OPENAI_API_KEY")
+        solving_method = result_bag.get("solving_method", "")
+        
+        # Create guided question with solving method
+        if solving_method:
+            guided_question = f"""Question: {new_question_text}
+
+IMPORTANT - Use this solving method/approach:
+{solving_method}
+
+Apply the method described above to solve this NEW question. Follow the same strategy but with the new numbers and context provided in the question."""
+            if verbose:
+                print("\n📋 Using solving method from step B")
+                print(f"  Method: {solving_method[:150]}..." if len(solving_method) > 150 else f"  Method: {solving_method}")
+        else:
+            guided_question = new_question_text
         
         if use_hf_solver:
-            # Use HuggingFace solver (one-shot reasoning, doesn't use steps JSON)
             answer_result = solve_with_steps_hf(
-                question=new_question_text,
+                question=guided_question,
                 steps_path=str(steps_path),
                 new_correct_answer=None,  # No expected answer yet
                 api_key=hf_api_key,
@@ -461,7 +553,7 @@ def run_math_flow(
         else:
             # Use original OpenAI-based solver
             answer_result = solve_with_steps(
-                question=new_question_text,
+                question=guided_question,
                 steps_path=str(steps_path),
                 api_key=api_key,
                 model=model,

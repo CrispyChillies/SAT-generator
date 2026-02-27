@@ -233,19 +233,36 @@ class HuggingFaceMathSolver:
         # Build prompt
         system_prompt = """You are a math expert. Analyze the provided HTML/MathML content, extract the equations, and solve them step-by-step using clear reasoning.
 
-For each problem:
-1. Identify what is being asked
-2. Extract the key information and equations
-3. Show your step-by-step solution with numbered steps
-4. Provide the final answer
+IMPORTANT - Required Output Structure:
 
-IMPORTANT - Output Format:
-- Structure your response with "**Step-by-Step Solution:**" followed by numbered steps
-- End with "**Final Answer:**" section
-- Put the final answer in \\boxed{} format: \\boxed{your_answer}
-- For single numbers: \\boxed{42}
-- For coordinates/tuples: \\boxed{(15, 3)}
-- For fractions: \\boxed{\\frac{1}{2}} or the decimal equivalent
+1. **Solving Method/Approach:** (2-4 sentences)
+   - Describe the general mathematical method/strategy to solve this type of problem
+   - Mention key formulas, theorems, or concepts to use
+   - Keep it general enough to apply to similar problems
+   - Do NOT include specific numbers or the solution itself
+
+2. **Step-by-Step Solution:** (numbered steps)
+   - Apply the method described above
+   - Show all calculations with specific numbers
+   - Provide clear reasoning for each step
+
+3. **Final Answer:**
+   - Put the final answer in \\boxed{} format: \\boxed{your_answer}
+   - For single numbers: \\boxed{42}
+   - For coordinates/tuples: \\boxed{(15, 3)}
+   - For fractions: \\boxed{\\frac{1}{2}} or the decimal equivalent
+
+Example format:
+**Solving Method/Approach:**
+To solve this problem, use the Pythagorean theorem which states that in a right triangle, a² + b² = c². Identify the known sides and solve for the unknown side algebraically.
+
+**Step-by-Step Solution:**
+1. Given: side a = 3, side b = 4
+2. Apply formula: 3² + 4² = c²
+3. Calculate: 9 + 16 = c²
+4. Therefore: c = 5
+
+**Final Answer:** \\boxed{5}
 
 Be precise with calculations and show all intermediate steps."""
         
@@ -256,7 +273,10 @@ Problem/Explanation:
 
 Expected Answer: {correct_answer}
 
-Please solve this problem step by step. Show your reasoning clearly and provide the final answer in \\boxed{{}} format."""
+Please solve this problem following the required output structure:
+1. First, describe the solving method/approach (general strategy)
+2. Then show the step-by-step solution (specific calculations)
+3. Finally, provide the answer in \\boxed{{}} format"""
         
         try:
             # Call HuggingFace LLM
@@ -696,7 +716,7 @@ def solve_with_steps_hf(
         
         # Solve (no expected answer in this interface)
         trace = solver.solve(
-            mathml_explanation=question_text,
+            mathml_explanation="",
             correct_answer=new_correct_answer,  # Pass expected answer for verification
             question=question_text,
             temperature=temperature,
