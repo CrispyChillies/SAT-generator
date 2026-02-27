@@ -142,6 +142,8 @@ class HuggingFaceMathSolver:
         api_key: Optional[str] = None,
         model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
         base_url: str = "https://router.huggingface.co/v1",
+        openai_api_key: Optional[str] = None,
+        chatgpt_model: str = "gpt-4o-mini",
         verbose: bool = False
     ):
         """
@@ -151,6 +153,8 @@ class HuggingFaceMathSolver:
             api_key: HuggingFace API key (or use HF_API_KEY env var)
             model: Model name (default: GLM-Z1-9B)
             base_url: HuggingFace router URL
+            openai_api_key: OpenAI API key for ChatGPT verification (or use OPENAI_API_KEY env var)
+            chatgpt_model: ChatGPT model for answer verification (default: gpt-4o-mini)
             verbose: Print detailed logs
         """
         self.api_key = api_key or os.getenv("HF_API_KEY")
@@ -162,10 +166,23 @@ class HuggingFaceMathSolver:
         self.verbose = verbose
         self.parser = MathMLParser()
         
+        # HuggingFace client for problem solving
         self.client = OpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
         )
+        
+        # ChatGPT client for answer verification
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self.chatgpt_model = chatgpt_model
+        if self.openai_api_key:
+            self.chatgpt_client = OpenAI(
+                api_key=self.openai_api_key,
+            )
+        else:
+            self.chatgpt_client = None
+            if self.verbose:
+                print("⚠️ OPENAI_API_KEY not set - LLM verification will be unavailable")
     
     def solve(
         self, 
@@ -193,8 +210,10 @@ class HuggingFaceMathSolver:
             ExecutionTrace with complete solving history
         """
         # Parse MathML to readable text
-        readable = self.parser.parse(mathml_explanation)['text'] if mathml_explanation else mathml_explanation
-        question_text = self.parser.parse(question)['text'] if question else question
+        # readable = self.parser.parse(mathml_explanation)['text'] if mathml_explanation else mathml_explanation
+        readable = mathml_explanation
+        # question_text = self.parser.parse(question)['text'] if question else question
+        question_text = question
         
         trace = ExecutionTrace(
             problem_description=readable,
@@ -456,7 +475,7 @@ Please solve this problem step by step. Show your reasoning clearly and provide 
     
     def _check_answer_with_llm(self, computed: Any, expected: Any) -> Optional[bool]:
         """
-        Use LLM to verify if computed answer matches expected answer.
+        Use ChatGPT to verify if computed answer matches expected answer.
         
         This is useful when answers may be in different formats but semantically equivalent:
         - Fractions vs decimals: 1/2 vs 0.5
@@ -469,9 +488,14 @@ Please solve this problem step by step. Show your reasoning clearly and provide 
             expected: The expected correct answer
             
         Returns:
-            True if LLM judges answers as equivalent, False if different, None if error
+            True if ChatGPT judges answers as equivalent, False if different, None if error
         """
         if computed is None or expected is None:
+            return None
+        
+        if not self.chatgpt_client:
+            if self.verbose:
+                print("⚠️ ChatGPT client not available - skipping LLM verification")
             return None
         
         try:
@@ -489,8 +513,8 @@ Consider these as equivalent:
 
 Respond with ONLY one word: "CORRECT" if they are equivalent, or "INCORRECT" if they are different."""
 
-            completion = self.client.chat.completions.create(
-                model=self.model,
+            completion = self.chatgpt_client.chat.completions.create(
+                model=self.chatgpt_model,
                 messages=[
                     {"role": "system", "content": "You are a precise mathematical answer verification expert. Compare answers for equivalence."},
                     {"role": "user", "content": prompt}
@@ -510,14 +534,14 @@ Respond with ONLY one word: "CORRECT" if they are equivalent, or "INCORRECT" if 
             elif "INCORRECT" in response:
                 return False
             else:
-                # If LLM response is unclear, return None
+                # If ChatGPT response is unclear, return None
                 if self.verbose:
-                    print(f"⚠️ LLM verification unclear: {response}")
+                    print(f"⚠️ ChatGPT verification unclear: {response}")
                 return None
                 
         except Exception as e:
             if self.verbose:
-                print(f"⚠️ LLM verification failed: {e}")
+                print(f"⚠️ ChatGPT verification failed: {e}")
             return None
     
     def _check_answer(self, computed: Any, expected: Any) -> Optional[bool]:
@@ -545,14 +569,14 @@ Respond with ONLY one word: "CORRECT" if they are equivalent, or "INCORRECT" if 
                 print(f"✓ Numeric comparison: {numeric_result}")
             return numeric_result
         
-        # Strategy 2: Fall back to LLM verification for non-numeric or unclear cases
+        # Strategy 2: Fall back to ChatGPT verification for non-numeric or unclear cases
         if self.verbose:
-            print("⚙️ Using LLM verification for answer comparison...")
+            print("⚙️ Using ChatGPT verification for answer comparison...")
         
         llm_result = self._check_answer_with_llm(computed, expected)
         if llm_result is not None:
             if self.verbose:
-                print(f"✓ LLM verification: {llm_result}")
+                print(f"✓ ChatGPT verification: {llm_result}")
             return llm_result
         
         # If both methods fail, return None (cannot determine)
@@ -656,7 +680,8 @@ def solve_with_steps_hf(
         }
     
     parser = parser or MathMLParser()
-    question_text = parser.parse(question)['text'] if question else str(question)
+    # question_text = parser.parse(question)['text'] if question else str(question)
+    question_text = question 
     
     try:
         # Initialize solver

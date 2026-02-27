@@ -1,0 +1,25 @@
+{
+  "category": "Polynomial Functions and Operations",
+  "difficulty": "Medium",
+  "id": "071a15bc-9340-4a8a-9878-4289f7252eea",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "<math><mo>(</mo><mn>164833</mn><mo>+</mo><mn>354139</mn><mi>i</mi><mo>)</mo></math>",
+      "<math><mo>(</mo><mn>164833</mn><mo>+</mo><mn>354138</mn><mi>i</mi><mo>)</mo></math>",
+      "<math><mo>(</mo><mn>164832</mn><mo>+</mo><mn>354139</mn><mi>i</mi><mo>)</mo></math>",
+      "<math><mo>(</mo><mn>163833</mn><mo>+</mo><mn>354139</mn><mi>i</mi><mo>)</mo></math>"
+    ],
+    "correct_answer": [
+      "A"
+    ],
+    "explanation": "To evaluate <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>)</mo><mn>8</mn><mo>&#x2212;</mo><mn>5</mn><mi>i</mi></math>, we can use the binomial theorem or De Moivre's theorem to simplify <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>)</mo><mn>8</mn></math>, then subtract <math><mn>5</mn><mi>i</mi></math> to get the final result of <math><mn>164833</mn><mo>+</mo><mn>354139</mn><mi>i</mi></math>.",
+    "paragraph": null,
+    "question": "Evaluate <math><mo>(</mo><mn>3</mn><mo>+</mo><mn>4</mn><mi>i</mi><mo>)</mo><mn>8</mn><mo>&#x2212;</mo><mn>5</mn><mi>i</mi></math>."
+  },
+  "section": "Algebra",
+  "skill": "",
+  "subject": "Algebra",
+  "type": "multiple-choice"
+}

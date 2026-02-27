@@ -72,7 +72,7 @@ def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
     raw = q_block.get("correct_answer") or sample.get("correct_answer")
 
     if raw is None:
-        return raw
+        return 
 
     # Lấy chữ cái đầu nếu correct_answer là list (vd: ["C"] -> "C")
     letter = raw[0] if isinstance(raw, (list, tuple)) and len(raw) > 0 else raw
@@ -122,6 +122,7 @@ def run_math_flow(
     verbose: bool = True,
     use_hf_solver: bool = False,
     hf_api_key: Optional[str] = None,
+    open_ai_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Chạy luồng đầy đủ theo flow.md.
@@ -234,11 +235,12 @@ def run_math_flow(
             # Use HuggingFace solver
             agent = HuggingFaceMathSolver(
                 api_key=hf_api_key,
+                openai_api_key=open_ai_api_key, 
                 model="zai-org/GLM-Z1-9B-0414:featherless-ai",
                 verbose=verbose
             )
             trace = agent.solve(
-                question=question_text,
+                question=question_html,
                 mathml_explanation=explanation,
                 correct_answer=correct_answer,
                 steps_json_path=str(steps_path),
@@ -615,6 +617,7 @@ def run_flow(
     verbose: bool = True,
     use_hf_solver: bool = False,
     hf_api_key: Optional[str] = None,
+    open_ai_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Unified flow that automatically routes to Math or R&W generation based on question type.
@@ -660,6 +663,7 @@ def run_flow(
             verbose=verbose,
             use_hf_solver=use_hf_solver,
             hf_api_key=hf_api_key,
+            open_ai_api_key=open_ai_api_key,
         )
 
 
@@ -676,6 +680,7 @@ def main():
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
     ap.add_argument("--use-hf", action="store_true", help="Dùng HuggingFace solver thay vì OpenAI (chỉ cho Math questions)")
     ap.add_argument("--hf-api-key", type=str, default=None, help="HuggingFace API key (hoặc dùng biến môi trường HF_API_KEY)")
+    ap.add_argument("--open-ai-api-key", type=str, default=None, help="OpenAI API key (hoặc dùng biến môi trường OPENAI_API_KEY)")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
     args = ap.parse_args()
@@ -697,6 +702,7 @@ def main():
         verbose=not args.quiet,
         use_hf_solver=args.use_hf,
         hf_api_key=args.hf_api_key,
+        open_ai_api_key=args.open_ai_api_key,
     )
 
     if args.save_result:
