@@ -246,6 +246,8 @@ IMPORTANT - Output Format:
 - For single numbers: \\boxed{42}
 - For coordinates/tuples: \\boxed{(15, 3)}
 - For fractions: \\boxed{\\frac{1}{2}} or the decimal equivalent
+- For multiple solutions/answers: Use a SINGLE \\boxed{} with comma-separated values: \\boxed{15,2} (NOT \\boxed{15}, \\boxed{2})
+- For multiple equations: Keep them in a single \\boxed{}: \\boxed{m=4c, c+m=25} or use line breaks within one \\boxed{}
 
 Be precise with calculations and show all intermediate steps."""
         
@@ -332,19 +334,25 @@ Please solve this problem step by step. Show your reasoning clearly and provide 
         final_answer = None
         
         # Priority 1: Extract from \boxed{} - most reliable LLM answer format
-        boxed_patterns = [
-            r'\\boxed\{([^{}]+)\}',  # \boxed{...}
-            r'\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}',  # Nested braces
-        ]
+        # First try to find all \boxed{} occurrences
+        boxed_pattern = r'\\boxed\{([^{}]+)\}'
+        all_matches = re.findall(boxed_pattern, response)
         
-        for pattern in boxed_patterns:
-            match = re.search(pattern, response)
+        if all_matches:
+            # If multiple \boxed{} found (e.g., \boxed{15}, \boxed{2}), combine them
+            if len(all_matches) > 1:
+                # Join multiple boxed contents with comma
+                final_answer = ','.join(match.strip() for match in all_matches)
+            else:
+                # Single \boxed{} found
+                final_answer = all_matches[0].strip()
+        
+        # If no simple boxed found, try nested braces pattern
+        if final_answer is None:
+            nested_pattern = r'\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}'
+            match = re.search(nested_pattern, response)
             if match:
-                boxed_content = match.group(1).strip()
-                # final_answer = self._parse_boxed_content(boxed_content)
-                final_answer = boxed_content
-                if final_answer is not None:
-                    break
+                final_answer = match.group(1).strip()
         
         # Priority 2: Look for "Final Answer:" section
         if final_answer is None:

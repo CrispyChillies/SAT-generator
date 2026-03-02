@@ -1,0 +1,25 @@
+{
+  "category": "Algebra",
+  "difficulty": "Easy",
+  "id": "b6d69918-1837-47bb-8186-4303eca83456",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "<math alttext=\"dollar sign 3,600\"><mo>$</mo><mn>3,600</mn></math>",
+      "<math alttext=\"dollar sign 3,500\"><mo>$</mo><mn>3,500</mn></math>",
+      "<math alttext=\"dollar sign 4,100\"><mo>$</mo><mn>4,100</mn></math>",
+      "<math alttext=\"dollar sign 4,600\"><mo>$</mo><mn>4,600</mn></math>"
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "<p>Choice C is correct. It's given that <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> represents the total cost, in dollars, to join the gym with a monthly fee of <math alttext=\"x\"><mi>x</mi></math> dollars. To find the total cost when the monthly fee is <math alttext=\"dollar sign 150\"><mo>$</mo><mn>150</mn></math>, substitute <math alttext=\"150\"><mn>150</mn></math> into the equation <math alttext=\"f left parenthesis x right parenthesis equals 24 x plus 500\"><mi>f</mi><mfenced><mi>x</mi></mfenced><mo>=</mo><mn>24</mn><mi>x</mi><mo>+</mo><mn>500</mn></math>. This gives <math alttext=\"f left parenthesis 150 right parenthesis equals 24 left parenthesis 150 right parenthesis plus 500\"><mi>f</mi><mfenced><mn>150</mn></mfenced><mo>=</mo><mn>24</mn><mfenced><mn>150</mn></mfenced><mo>+</mo><mn>500</mn></math>, or <math alttext=\"f left parenthesis 150 right parenthesis equals 4,100\"><mi>f</mi><mfenced><mn>150</mn></mfenced><mo>=</mo><mn>4,100</mn></math>. Thus, the total cost to join the gym when the monthly fee is <math alttext=\"dollar sign 150\"><mo>$</mo><mn>150</mn></math> is&nbsp;<math alttext=\"dollar sign 4,100\"><mo>$</mo><mn>4,100</mn></math>.&nbsp;</p><p>Choice A is incorrect and may result from omitting the <math alttext=\"500\"><mn>500</mn></math> sign-up fee and only calculating the monthly payments.</p><p>Choice B is incorrect and may result from miscalculating the product of <math alttext=\"24 times 150\"><mn>24 \times 150</mn></math> or the final sum.</p><p>Choice D is incorrect and may result from adding an incorrect fixed fee or miscalculating the multiplication.</p>",
+    "paragraph": null,
+    "question": "<p style=\"text-align: left;\">The total cost <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math>, in dollars, to join a gym for <math alttext=\"24\"><mn>24</mn></math> months from a particular fitness center is given by <math alttext=\"f left parenthesis x right parenthesis equals 24 x plus 500\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mn>24</mn></mrow><mi>x</mi><mo>+</mo><mrow><mn>500</mn></mrow></math>, where <math alttext=\"x\"><mi>x</mi></math> is the monthly fee, in dollars. What is the total cost to join the gym when the monthly fee is <math alttext=\"dollar sign 150\"><mo>$</mo><mn>150</mn></math>?</p>"
+  },
+  "section": "Math",
+  "skill": "",
+  "subject": "SAT",
+  "type": "multiple-choice"
+}
