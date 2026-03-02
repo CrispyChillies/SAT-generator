@@ -699,10 +699,9 @@ def solve_with_steps_hf(
             verbose=verbose
         )
         
-        # Solve (no expected answer in this interface)
         trace = solver.solve(
             mathml_explanation=question_text,
-            correct_answer=new_correct_answer,  # Pass expected answer for verification
+            correct_answer=new_correct_answer, 
             question=question_text,
             temperature=temperature,
             steps_json_path=str(steps_path) if steps_path else None,
