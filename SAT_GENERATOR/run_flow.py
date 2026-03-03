@@ -37,7 +37,7 @@ from mathml_parser import MathMLParser
 
 # HuggingFace solver (optional alternative to OpenAI)
 try:
-    from SAT_GENERATOR.generate_solver_question_hf import HuggingFaceMathSolver, solve_with_steps_hf
+    from huggingface_math_solver import HuggingFaceMathSolver, solve_with_steps_hf
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False

@@ -23,7 +23,7 @@ def _get_reasoning_llm():
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not set in environment")
-        _llm_reasoning = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        _llm_reasoning = ChatOpenAI(model="gpt-4o", temperature=0)
     return _llm_reasoning
 
 
@@ -208,6 +208,8 @@ Example ending:
 Therefore, choice D is correct because it accurately reflects the data.
 
 ANSWER: D"""
+    
+    print(prompt)
     
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content.strip()

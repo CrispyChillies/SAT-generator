@@ -283,7 +283,6 @@ def solve_rw_question_simple(
         if parsed_paragraph['has_graph']:
             graph = parsed_paragraph['graph']
             paragraph_content = f"{paragraph_content}\n\nGraph: {graph.raw_long_description}"
-        print(paragraph_content)
         result = tool.invoke({
             "paragraph": paragraph_content,
             "question": question,

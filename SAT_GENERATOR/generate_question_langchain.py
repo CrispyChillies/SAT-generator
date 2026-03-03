@@ -696,6 +696,12 @@ Return a JSON object with:
 - new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...] or [1.0, 2.0, 3.0, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
 
 
@@ -761,6 +767,12 @@ Return a JSON object with:
 - new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
 - new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
 
 
@@ -856,6 +868,12 @@ EXAMPLE TRANSFORMATION:
 Sample: "Solve for x: 2x + 5 = 13"
 Your New Question: "Solve for y: 3y - 7 = 14" 
 (Both test: solving linear equations with one variable, but different equations)
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
     else:
         # Conservative mode: only change numbers
@@ -884,6 +902,12 @@ Sample correct answer (content of the right choice, HTML + MathML):
 ---
 
 Return a JSON object with keys: question, explanation, correct_answer. Each value: same string as sample with only numbers substituted; numbers must be consistent across all three.
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
 
 
@@ -1002,6 +1026,12 @@ EXAMPLE TRANSFORMATION:
 Sample: "A car travels 120 miles in 2 hours. What is its average speed?"
 Your New Question: "A student reads 45 pages in 1.5 hours. What is the student's reading rate in pages per hour?"
 (Both test: rate = distance/time concept, but different contexts)
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
     else:
         # Conservative mode: only change numbers
@@ -1033,6 +1063,12 @@ Return a JSON object with keys: question, explanation, choices, correct_answer_l
 - explanation: new explanation string (only numbers changed, consistent with new question).
 - choices: list of exactly 4 strings, in order A, B, C, D (only numbers changed in each).
 - correct_answer_letter: one of "A", "B", "C", "D" (the correct choice for the new question; typically the same as the sample, {correct_letter}).
+
+You must output ONLY valid JSON.
+Do NOT include any explanation.
+Do NOT include <think> tags.
+Do NOT include reasoning.
+Return ONLY the JSON object.
 """
 
 

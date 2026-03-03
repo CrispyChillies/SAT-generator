@@ -209,11 +209,28 @@ class HuggingFaceMathSolver:
         Returns:
             ExecutionTrace with complete solving history
         """
-        # Parse MathML to readable text
-        # readable = self.parser.parse(mathml_explanation)['text'] if mathml_explanation else mathml_explanation
-        readable = mathml_explanation
-        # question_text = self.parser.parse(question)['text'] if question else question
-        question_text = question
+        # Detect if content contains graph (SVG) - if yes, parse it; if no, keep raw
+        def contains_svg(text: str) -> bool:
+            """Check if text contains SVG graph content"""
+            return bool(text and '<svg' in text.lower())
+        
+        # Parse explanation
+        if contains_svg(mathml_explanation):
+            # Graph-based question: parse to extract text and graph info
+            parsed_explanation = self.parser.parse(mathml_explanation)
+            readable = parsed_explanation['text']
+        else:
+            # Normal MathML question: keep as-is (no parsing needed)
+            readable = mathml_explanation
+        
+        # Parse question
+        if contains_svg(question):
+            # Graph-based question: parse to extract text
+            parsed_question = self.parser.parse(question)
+            question_text = parsed_question['text']
+        else:
+            # Normal MathML question: keep as-is (no parsing needed)
+            question_text = question
         
         trace = ExecutionTrace(
             problem_description=readable,
@@ -688,8 +705,20 @@ def solve_with_steps_hf(
         }
     
     parser = parser or MathMLParser()
-    # question_text = parser.parse(question)['text'] if question else str(question)
-    question_text = question 
+    
+    # Detect if content contains graph (SVG) - if yes, parse it; if no, keep raw
+    def contains_svg(text: str) -> bool:
+        """Check if text contains SVG graph content"""
+        return bool(text and '<svg' in text.lower())
+    
+    # Parse question
+    if contains_svg(question):
+        # Graph-based question: parse to extract text
+        parsed_question = parser.parse(question)
+        question_text = parsed_question['text']
+    else:
+        # Normal MathML question: keep as-is (no parsing needed)
+        question_text = question
     
     try:
         # Initialize solver

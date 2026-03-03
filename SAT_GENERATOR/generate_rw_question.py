@@ -263,36 +263,39 @@ def _calculate_clean_y_axis_range(max_value: float) -> tuple:
     
     Examples:
         - max_value=150 → (0, 200, 50)
-        - max_value=45 → (0, 50, 10)
-        - max_value=750 → (0, 1000, 100)
+        - max_value=45 → (0, 95, 10)
+        - max_value=750 → (0, 800, 100)
     """
     import math
     
-    # Add 20% padding to max value
-    padded_max = max_value * 1.2
+    if max_value <= 0:
+        return (0, 100, 20)
     
-    # Determine appropriate increment based on magnitude
-    if padded_max <= 50:
+    # Set y_max to max_value + 50 for consistent height
+    y_max = max_value + 50
+    
+    # Determine appropriate increment based on y_max magnitude
+    if y_max <= 50:
         increment = 10
-    elif padded_max <= 100:
+    elif y_max <= 100:
+        increment = 10
+    elif y_max <= 200:
         increment = 20
-    elif padded_max <= 200:
+    elif y_max <= 500:
         increment = 50
-    elif padded_max <= 500:
-        increment = 50
-    elif padded_max <= 1000:
+    elif y_max <= 1000:
         increment = 100
-    elif padded_max <= 2000:
+    elif y_max <= 2000:
         increment = 200
-    elif padded_max <= 5000:
+    elif y_max <= 5000:
         increment = 500
     else:
         increment = 1000
     
-    # Round y_max UP to nearest multiple of increment
-    y_max = math.ceil(padded_max / increment) * increment
+    # Round y_max UP to nearest multiple of increment for clean divisions
+    y_max_rounded = math.ceil(y_max / increment) * increment
     
-    return (0, int(y_max), int(increment))
+    return (0, int(y_max_rounded), int(increment))
 
 
 def _generate_bar_chart_svg(
@@ -1331,14 +1334,10 @@ def generate_new_rw_question(
                     print(f"[generate_rw_question] Generating grouped bar chart SVG...")
                 
                 try:
-                    # Infer y-axis range from data if not provided
-                    if graph_spec.y_axis_range:
-                        y_range = graph_spec.y_axis_range
-                    else:
-                        # Auto-calculate clean range from new data
-                        all_values = [v for cat_data in graph_data.values() for v in cat_data.values()]
-                        max_val = max(all_values) if all_values else 100
-                        y_range = _calculate_clean_y_axis_range(max_val)
+                    # Always calculate y-axis range from new data (not from original graph)
+                    all_values = [v for cat_data in graph_data.values() for v in cat_data.values()]
+                    max_val = max(all_values) if all_values else 100
+                    y_range = _calculate_clean_y_axis_range(max_val)
                     
                     svg_string = _generate_grouped_bar_chart_svg(
                         title=generated.graph_title,
@@ -1466,13 +1465,9 @@ def generate_new_rw_question(
                     print(f"[generate_rw_question] Generating bar chart SVG...")
                 
                 try:
-                    # Infer y-axis range from data if not provided
-                    if graph_spec.y_axis_range:
-                        y_range = graph_spec.y_axis_range
-                    else:
-                        # Auto-calculate clean range from new data
-                        max_val = max(generated.graph_values) if generated.graph_values else 100
-                        y_range = _calculate_clean_y_axis_range(max_val)
+                    # Always calculate y-axis range from new data (not from original graph)
+                    max_val = max(generated.graph_values) if generated.graph_values else 100
+                    y_range = _calculate_clean_y_axis_range(max_val)
                     
                     svg_string = _generate_bar_chart_svg(
                         title=generated.graph_title,
