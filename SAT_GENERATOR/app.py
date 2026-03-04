@@ -137,7 +137,7 @@ def api_run_flow():
         verbose=True,
         use_hf_solver=True,
         use_hf_generator=True,
-        creative_mode=True,
+        creative_mode=False,
     )
 
     # Chuẩn hóa để JSON (bỏ object không serialize được nếu có)
