@@ -401,95 +401,52 @@ class MathMLParser:
         """
         Parse single (non-grouped) bar chart from HTML list structure.
         
-        **Differentiation from grouped bar chart:**
+        Uses pure HTML structure pattern (no text heuristics):
         
         SINGLE BAR CHART pattern:
         <ul>
-          <li>The data for the N categories are as follows:
-            <ul>
-              <li>category1: value1 [unit]</li>  ← VALUE DIRECTLY after colon
-              <li>category2: value2 [unit]</li>
-            </ul>
-          </li>
+          <li>category1: value1 [unit]</li>  ← VALUE DIRECTLY after colon
+          <li>category2: value2 [unit]</li>
         </ul>
         
-        GROUPED BAR CHART pattern:
-        <ul>
-          <li>For each data category, the following bars are shown:
-            <ul>
-              <li>group1</li>
-              <li>group2</li>
-            </ul>
-          </li>
-          <li>The data for the N categories are as follows:
-            <ul>
-              <li>category1:               ← Notice the NESTED <ul> after colon
-                <ul>
-                  <li>group1: value1</li>
-                  <li>group2: value2</li>
-                </ul>
-              </li>
-            </ul>
-          </li>
-        </ul>
-        
-        Key differences:
-        1. Grouped has "For each data category, the following bars are shown" section
-        2. Grouped has nested <ul> tags after category name
-        3. Single has value DIRECTLY after colon (no nested structure)
+        Key: VALUE is directly after colon (no nested <ul> tags)
         
         Returns:
             Dict with 'categories' and 'values' keys or None
         """
-        # Check if this looks like bar chart data
-        if "data for the" not in html.lower() or "categories are as follows" not in html.lower():
+        # Extract all <ul> blocks
+        ul_blocks = re.findall(r'<ul>(.*?)</ul>', html, re.DOTALL | re.IGNORECASE)
+        
+        if not ul_blocks:
             return None
-        
-        # If this has "for each data category" and "following bars are shown", it's grouped
-        if "for each data category" in html.lower() and "following bars are shown" in html.lower():
-            return None
-        
-        # Extract data section after "data for the N categories are as follows"
-        data_match = re.search(
-            r'data for the \d+ categories are as follows:.*?<br\s*/?>?\s*<ul>(.*?)</ul>',
-            html,
-            re.DOTALL | re.IGNORECASE
-        )
-        if not data_match:
-            return None
-        
-        data_section = data_match.group(1)
-        
-        # Key check: If data_section contains nested <ul> tags, it's a grouped bar chart
-        # We're looking for direct <li>CATEGORY: VALUE</li>, not <li>CATEGORY:<ul>...</ul></li>
-        if re.search(r'<li>[^<]*:<\s*ul\s*>', data_section, re.IGNORECASE):
-            return None
-        
-        # Extract category:value pairs where value is directly after colon
-        # Pattern: <li>CATEGORY_NAME: NUMBER</li> (no nested tags)
         
         categories = []
         values = []
         
-        # Find all <li>TEXT</li> items where TEXT contains CATEGORY: NUMBER
-        # and TEXT does NOT contain nested tags or <ul>
-        li_pattern = r'<li>([^<]+)</li>'
-        li_items = re.findall(li_pattern, data_section, re.IGNORECASE)
+        # Process each <ul> block
+        for ul_content in ul_blocks:
+            # Check if this block has nested <ul> tags - if yes, skip (it's grouped or wrapper)
+            if '<ul>' in ul_content:
+                continue
+            
+            # Find all <li> items that match pattern: <li>TEXT</li> where TEXT = "category: number"
+            li_pattern = r'<li>([^<]+)</li>'
+            li_items = re.findall(li_pattern, ul_content, re.IGNORECASE)
+            
+            for item_text in li_items:
+                # Check if this item matches CATEGORY: NUMBER [UNIT] pattern
+                # Examples: "Ultra-Fast Robot Hand: 505 grams" or "Item A: 1,252"
+                # Pattern: CATEGORY_NAME: NUMBER [optional unit/text]
+                match = re.match(r'^([^:]+):\s*([0-9,.]+)(?:\s+.*)?$', item_text.strip())
+                if match:
+                    category = match.group(1).strip()
+                    value_str = match.group(2).strip()
+                    # Remove commas from numbers (e.g., "1,252" -> 1252)
+                    value = float(value_str.replace(',', ''))
+                    categories.append(category)
+                    values.append(value)
         
-        for item_text in li_items:
-            # Check if this item matches CATEGORY: NUMBER [UNIT] pattern
-            # Examples: "Gorner: 41.2 square kilometers" or "Item A: 1,252"
-            # The key is that NUMBER is directly after colon (not nested in another tag)
-            # Pattern allows optional unit/text after the number
-            match = re.match(r'^([^:]+):\s*([0-9,.]+)(?:\s+.*)?$', item_text.strip())
-            if match:
-                category = match.group(1).strip()
-                value_str = match.group(2).strip()
-                # Remove commas from numbers (e.g., "1,252" -> 1252)
-                value = float(value_str.replace(',', ''))
-                categories.append(category)
-                values.append(value)
-        
+        # Only return if we found category:value pairs
         if not categories:
             return None
         
@@ -502,70 +459,56 @@ class MathMLParser:
         """
         Parse grouped bar chart from nested HTML list structure.
         
-        Pattern:
+        Uses pure HTML structure pattern (no text heuristics):
+        
+        GROUPED BAR CHART pattern:
         <ul>
-          <li>For each data category, the following bars are shown:
+          <li>category1:
             <ul>
-              <li>group1</li>
-              <li>group2</li>
+              <li>group1: value1</li>
+              <li>group2: value2</li>
             </ul>
           </li>
-          <li>The data for the N categories are as follows:
+          <li>category2:
             <ul>
-              <li>category1:
-                <ul>
-                  <li>group1: value1</li>
-                  <li>group2: value2</li>
-                </ul>
-              </li>
-              ...
+              <li>group1: value3</li>
+              <li>group2: value4</li>
             </ul>
           </li>
         </ul>
         
-        Key difference from single: values are NESTED in <ul> after category name
+        Key: After category name and colon, there's a NESTED <ul> with group:value pairs
         
         Returns:
             Dict with 'groups', 'categories', 'data' keys or None
         """
-        # Check if this is a grouped bar chart
-        if "for each data category" not in html.lower() or "following bars are shown" not in html.lower():
+        # Look for pattern: <li>CATEGORY_NAME:<ul>...<li>GROUP:VALUE</li>...</ul></li>
+        # This is the structural signature of grouped bar chart
+        
+        # Pattern: <li> TEXT : <ul> ... group data ... </ul> </li>
+        category_pattern = r'<li>\s*([^:<]+?)\s*:\s*<ul>(.*?)</ul>\s*</li>'
+        category_matches = re.findall(category_pattern, html, re.DOTALL | re.IGNORECASE)
+        
+        if not category_matches:
             return None
         
-        # Extract groups from first section
-        groups = []
-        groups_match = re.search(r'following bars are shown:.*?<ul>(.*?)</ul>', html, re.DOTALL | re.IGNORECASE)
-        if groups_match:
-            group_items = re.findall(r'<li>([^<]+)</li>', groups_match.group(1))
-            groups = [g.strip() for g in group_items if g.strip()]
-        
-        if not groups:
-            return None
-        
-        # Extract categories and data from second section
+        # Extract data from each category block
         categories = []
         grouped_data = {}
-        
-        # Find the data section - more flexible pattern
-        # Match from "data for the N categories" to the end of the outer ul
-        # Make <br> tag optional (some HTML has newline/whitespace instead)
-        data_match = re.search(r'data for the \d+ categories are as follows:\s*(?:<br\s*/?>)?\s*<ul>(.*)', html, re.DOTALL | re.IGNORECASE)
-        if not data_match:
-            return None
-        
-        data_section = data_match.group(1)
-        
-        # Extract each category block - match category name followed by nested ul with data
-        category_pattern = r'<li>\s*([^:<]+)\s*:\s*<ul>(.*?)</ul>\s*</li>'
-        category_matches = re.findall(category_pattern, data_section, re.DOTALL | re.IGNORECASE)
+        all_groups = set()  # Track all group names
         
         for category_name, category_data in category_matches:
             category_name = category_name.strip()
-            categories.append(category_name)
             
             # Extract group:value pairs within this category
-            value_pattern = r'<li>([^:]+):\s*([0-9,]+)</li>'
+            # Pattern: <li>GROUP_NAME: NUMBER</li>
+            value_pattern = r'<li>([^:]+):\s*([0-9,.]+)(?:\s+[^<]*)?</li>'
             value_matches = re.findall(value_pattern, category_data, re.IGNORECASE)
+            
+            if not value_matches:
+                continue  # Skip if no valid group:value pairs found
+            
+            categories.append(category_name)
             
             group_values = {}
             for group_name, value_str in value_matches:
@@ -573,14 +516,16 @@ class MathMLParser:
                 # Remove commas from numbers (e.g., "1,252" -> 1252)
                 value = float(value_str.replace(',', ''))
                 group_values[group_name] = value
+                all_groups.add(group_name)
             
             grouped_data[category_name] = group_values
         
-        if not categories or not grouped_data:
-            return None
+        # Only return if we have valid grouped structure
+        if not categories or not grouped_data or len(all_groups) < 2:
+            return None  # Need at least 2 groups for it to be "grouped"
         
         return {
-            'groups': groups,
+            'groups': sorted(list(all_groups)),  # Sort for consistent ordering
             'categories': categories,
             'data': grouped_data
         }

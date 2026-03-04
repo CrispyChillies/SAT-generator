@@ -1,9 +1,0 @@
-{
-  "steps": [
-    {
-      "step_number": 1,
-      "function_name": "reasoning",
-      "params_meaning": []
-    }
-  ]
-}

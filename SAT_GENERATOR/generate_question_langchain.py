@@ -621,6 +621,96 @@ def _update_explanation_for_corrected_answer(
     return explanation
 
 
+def _build_prompt_graph_multiple_choice_freeform(
+    question_text_no_svg: str,
+    original_explanation: str,
+    original_choices: List[str],
+    correct_letter: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Free-form prompt for reasoning LLMs - graph multiple-choice questions."""
+    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)])
+    long_desc_html = graph_spec.get("long_description_html", "")
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    # Add reasoning guidance for Medium/Hard questions
+    reasoning_guidance = ""
+    if difficulty.lower() in ["medium", "hard"]:
+        reasoning_guidance = """\n\nCRITICAL FOR MEDIUM/HARD QUESTIONS:
+- REASON about the graph data before generating
+- Ensure x_values and y_values are REASONABLE and make practical sense
+- For trend questions: ensure the trend is clear and interpretable
+- For min/max questions: make sure the extreme values are obviously distinguishable
+- Check that choices are plausible but have one clear correct answer
+- Avoid values that are too close together or too similar
+- Make sure the graph tells a coherent story with the data"""
+    
+    return f"""You are an SAT question writer. This is a multiple-choice question with a GRAPH.
+
+Task: Generate NEW numerical values for the graph and update all text accordingly.
+
+IMPORTANT:
+- Generate NEW x_values and y_values for the graph
+- Update question text, explanation, and choices to match new data
+- Keep HTML and MathML structure EXACTLY as in sample
+- CRITICAL: Calculate which answer is correct based on YOUR new data
+- Do NOT just copy the sample's correct letter ({correct_letter}) - it may be different for your data
+- Preserve the HTML structure of the long description (<ul><li>...</li></ul>){reasoning_guidance}
+
+Original Graph Specification:
+{graph_spec_json}
+
+Original Long Description HTML Structure (preserve this format):
+{long_desc_html}
+
+Sample question text (without SVG):
+{question_text_no_svg}
+
+Sample explanation:
+{original_explanation}
+
+Sample choices (correct: {correct_letter}):
+{choices_text}
+
+Category: {category}, Section: {section}, Difficulty: {difficulty}
+
+Generate your response in this format:
+
+QUESTION_TEXT:
+[New question text without SVG, only numbers changed]
+
+EXPLANATION:
+[New explanation matching new graph data]
+
+CHOICE_A:
+[First answer choice]
+
+CHOICE_B:
+[Second answer choice]
+
+CHOICE_C:
+[Third answer choice]
+
+CHOICE_D:
+[Fourth answer choice]
+
+CORRECT_ANSWER:
+[Letter A, B, C, or D - CALCULATE based on your new data]
+
+NEW_X_VALUES:
+[List of new x-axis values, e.g., 2015, 2016, 2017, 2018, 2019]
+
+NEW_Y_VALUES:
+[List of new y-axis values, e.g., 10.5, 15.2, 8.7, 12.3, 18.9]
+
+NEW_LONG_DESCRIPTION:
+[HTML description using <ul><li>...</li></ul> format with new values]
+"""
+
+
 def _build_prompt_graph_multiple_choice(
     question_text_no_svg: str,
     original_explanation: str,
@@ -702,6 +792,80 @@ Do NOT include any explanation.
 Do NOT include <think> tags.
 Do NOT include reasoning.
 Return ONLY the JSON object.
+"""
+
+
+def _build_prompt_graph_free_response_freeform(
+    question_text_no_svg: str,
+    original_explanation: str,
+    original_correct_answer: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Free-form prompt for reasoning LLMs - graph free-response questions."""
+    long_desc_html = graph_spec.get("long_description_html", "")
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    
+    # Add reasoning guidance for Medium/Hard questions
+    reasoning_guidance = ""
+    if difficulty.lower() in ["medium", "hard"]:
+        reasoning_guidance = """\n\nCRITICAL FOR MEDIUM/HARD QUESTIONS:
+- REASON about the graph data and what the question is asking
+- Ensure x_values and y_values are REASONABLE and make practical sense
+- Check that the correct answer is derivable from the graph with clear logic
+- Avoid values that lead to awkward decimals or overly complex calculations
+- Make sure the data tells a coherent, interpretable story
+- Ensure calculations with the new data yield clean, reasonable results"""
+    
+    return f"""You are an SAT question writer. This is a free-response question with a GRAPH.
+
+Task: Generate NEW numerical values for the graph and update all text accordingly.
+
+IMPORTANT:
+- Generate NEW x_values and y_values for the graph
+- Update question text, explanation, and correct answer to match new data
+- Keep HTML and MathML structure EXACTLY as in sample
+- CRITICAL: Calculate the correct answer based on YOUR new data
+- Preserve the HTML structure of the long description (<ul><li>...</li></ul>){reasoning_guidance}
+
+Original Graph Specification:
+{graph_spec_json}
+
+Original Long Description HTML Structure (preserve this format):
+{long_desc_html}
+
+Sample question text (without SVG):
+{question_text_no_svg}
+
+Sample explanation:
+{original_explanation}
+
+Sample correct answer:
+{original_correct_answer}
+
+Category: {category}, Section: {section}, Difficulty: {difficulty}
+
+Generate your response in this format:
+
+QUESTION_TEXT:
+[New question text without SVG, only numbers changed]
+
+EXPLANATION:
+[New explanation matching new graph data]
+
+CORRECT_ANSWER:
+[The correct answer in same format as sample]
+
+NEW_X_VALUES:
+[List of new x-axis values, e.g., 2015, 2016, 2017, 2018, 2019]
+
+NEW_Y_VALUES:
+[List of new y-axis values, e.g., 10.5, 15.2, 8.7, 12.3, 18.9]
+
+NEW_LONG_DESCRIPTION:
+[HTML description using <ul><li>...</li></ul> format with new values]
 """
 
 
@@ -810,6 +974,87 @@ def _get_correct_answer_content(sample: Dict[str, Any]) -> str:
     if isinstance(raw, str):
         return raw.strip()
     return str(raw).strip()
+
+
+def _build_prompt_freeform(
+    original_question_html: str,
+    original_explanation: str,
+    original_correct_answer: str,
+    category: str,
+    section: str,
+    q_type: str,
+    difficulty: str,
+    creative_mode: bool = True,
+) -> str:
+    """Free-form prompt for reasoning LLMs - free response questions."""
+    if creative_mode:
+        # For Medium/Hard: emphasis on reasoning and ensuring reasonable values
+        reasoning_guidance = ""
+        if difficulty.lower() in ["medium", "hard"]:
+            reasoning_guidance = """\n\nCRITICAL FOR MEDIUM/HARD QUESTIONS:
+- REASON about the mathematical logic before generating
+- Ensure all numerical values are REASONABLE and make practical sense
+- Check that the problem has a clear, logical solution path
+- Verify the answer is achievable with the given numbers
+- Make sure intermediate calculations yield clean, reasonable results
+- Avoid numbers that lead to awkward decimals or irrational solutions"""
+        
+        return f"""You are an SAT question writer. Generate a NEW free-response question that tests the SAME mathematical skill as the sample, but with a DIFFERENT scenario.
+
+Requirements:
+1. SAME SKILL: Test the exact same mathematical concept/skill
+2. DIFFERENT SCENARIO: Completely different context
+3. DIFFERENT NUMBERS: New numerical values
+4. PRESERVE FORMAT: Keep ALL HTML tags and MathML structure EXACTLY as in sample
+5. Calculate the correct answer for your new question{reasoning_guidance}
+
+Category: {category}, Section: {section}, Type: {q_type}, Difficulty: {difficulty}
+
+Sample question:
+{original_question_html}
+
+Sample explanation:
+{original_explanation}
+
+Sample correct answer:
+{original_correct_answer}
+
+Generate your response in this format:
+
+QUESTION:
+[Your new question with proper HTML+MathML]
+
+EXPLANATION:
+[Detailed explanation for your new question]
+
+CORRECT_ANSWER:
+[The correct answer in same format as sample]
+"""
+    else:
+        return f"""You are an SAT question writer. Change ONLY the numerical values. Keep ALL wording, HTML tags, and MathML structure identical.
+
+Category: {category}, Section: {section}, Type: {q_type}, Difficulty: {difficulty}
+
+Sample question:
+{original_question_html}
+
+Sample explanation:
+{original_explanation}
+
+Sample correct answer:
+{original_correct_answer}
+
+Generate your response in this format:
+
+QUESTION:
+[Question with only numbers changed]
+
+EXPLANATION:
+[Explanation with only numbers changed]
+
+CORRECT_ANSWER:
+[Correct answer with only numbers changed]
+"""
 
 
 def _build_prompt(
@@ -933,7 +1178,7 @@ def _get_correct_answer_letter(sample: Dict[str, Any]) -> Optional[str]:
     return letter if letter in ("A", "B", "C", "D") else None
 
 
-def _clean_reasoning_response(response_text: str) -> str:
+def _clean_reasoning_response(response_text: Union[str, List]) -> str:
     """
     Clean response from reasoning models that output <think>...</think> tags.
     
@@ -941,7 +1186,7 @@ def _clean_reasoning_response(response_text: str) -> str:
         response_text: Raw response from LLM that may contain thinking tags and code blocks
     
     Returns:
-        Clean JSON string ready for parsing
+        Clean text with thinking tags removed
     """
     # Ensure we have a string (handle LangChain AIMessage.content which might be typed as Union[str, List])
     if not isinstance(response_text, str):
@@ -950,18 +1195,174 @@ def _clean_reasoning_response(response_text: str) -> str:
     # Remove <think>...</think> tags and their content
     cleaned = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL | re.IGNORECASE)
     
-    # Extract JSON from code blocks (```json ... ```)
-    json_match = re.search(r'```json\s*(.+?)\s*```', cleaned, flags=re.DOTALL)
-    if json_match:
-        return json_match.group(1).strip()
-    
-    # Extract JSON from code blocks (``` ... ```)
-    code_block_match = re.search(r'```\s*(.+?)\s*```', cleaned, flags=re.DOTALL)
-    if code_block_match:
-        return code_block_match.group(1).strip()
-    
-    # No code blocks, just clean whitespace
     return cleaned.strip()
+
+
+def _format_with_gpt4o(
+    reasoning_output: str,
+    output_schema: type[BaseModel],
+    api_key: Optional[str] = None,
+) -> Any:
+    """
+    Use GPT-4o to format reasoning LLM output into strict JSON structure.
+    
+    Args:
+        reasoning_output: Free-form output from reasoning LLM
+        output_schema: Pydantic model class defining the expected output structure
+        api_key: OpenAI API key
+    
+    Returns:
+        Structured output matching the schema
+    """
+    openai_key = api_key or os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        raise ValueError("Need OPENAI_API_KEY for formatting")
+    
+    formatter_llm = ChatOpenAI(
+        model="gpt-4o",
+        temperature=0.0,
+        api_key=openai_key,  # type: ignore
+    )
+    
+    # Get schema description for the prompt
+    schema_json = output_schema.model_json_schema()
+    schema_description = json.dumps(schema_json, indent=2)
+    
+    prompt = f"""You are a JSON formatter. Your task is to extract information from the reasoning LLM output and structure it into valid JSON matching the required schema.
+
+IMPORTANT:
+- Extract ALL information from the reasoning output
+- Preserve ALL HTML and MathML tags EXACTLY as they appear
+- Do NOT modify any content, only structure it into JSON
+- Ensure output is valid JSON matching the schema
+
+Required JSON Schema:
+{schema_description}
+
+Reasoning LLM Output:
+---
+{reasoning_output}
+---
+
+Return ONLY the JSON object. Do NOT include any explanation or markdown code blocks."""
+    
+    structured_llm = formatter_llm.with_structured_output(output_schema)
+    result = structured_llm.invoke([HumanMessage(content=prompt)])
+    return result  # type: ignore
+
+
+def _build_prompt_multiple_choice_freeform(
+    original_question_html: str,
+    original_explanation: str,
+    original_choices: List[str],
+    correct_letter: str,
+    category: str,
+    section: str,
+    difficulty: str,
+    creative_mode: bool = True,
+) -> str:
+    """Free-form prompt for reasoning LLMs - focuses on content generation, not JSON structure."""
+    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)])
+    
+    if creative_mode:
+        # For Medium/Hard: emphasis on reasoning and ensuring reasonable values
+        reasoning_guidance = ""
+        if difficulty.lower() in ["medium", "hard"]:
+            reasoning_guidance = """\n\nCRITICAL FOR MEDIUM/HARD QUESTIONS:
+- REASON about the mathematical logic before generating
+- Ensure all numerical values are REASONABLE and make practical sense
+- Check that the problem has a clear, logical solution path
+- Verify the correct answer is achievable with the given numbers
+- Make sure intermediate calculations yield clean, reasonable results
+- Avoid numbers that lead to awkward decimals or irrational solutions
+- Create plausible distractors that represent common mistakes"""
+        
+        return f"""You are an SAT question writer. Generate a NEW multiple-choice question that tests the SAME mathematical skill as the sample, but with a DIFFERENT scenario.
+
+Requirements:
+1. SAME SKILL: Test the exact same mathematical concept/skill
+2. DIFFERENT SCENARIO: Completely different context (e.g., if sample is about cars, use books, temperature, etc.)
+3. DIFFERENT NUMBERS: New numerical values appropriate to your scenario
+4. PRESERVE FORMAT: Keep ALL HTML tags and MathML structure EXACTLY as in the sample
+5. EXACTLY 4 CHOICES: Provide 4 answer options (A, B, C, D)
+6. Calculate the correct answer for your new question{reasoning_guidance}
+
+Category: {category}, Section: {section}, Difficulty: {difficulty}
+
+Sample question:
+{original_question_html}
+
+Sample explanation:
+{original_explanation}
+
+Sample choices (correct: {correct_letter}):
+{choices_text}
+
+Generate your response in this format:
+
+QUESTION:
+[Your new question with proper HTML+MathML, testing the same skill but different scenario]
+
+EXPLANATION:
+[Detailed explanation showing how to solve YOUR new question]
+
+CHOICE_A:
+[First answer choice]
+
+CHOICE_B:
+[Second answer choice]
+
+CHOICE_C:
+[Third answer choice]
+
+CHOICE_D:
+[Fourth answer choice]
+
+CORRECT_ANSWER:
+[Letter of correct answer: A, B, C, or D]
+"""
+    else:
+        return f"""You are an SAT question writer. Change ONLY the numerical values in this multiple-choice question. Keep ALL wording, HTML tags, and MathML structure identical.
+
+Strict rules:
+- Change ONLY numbers (digits in <mn> tags, numeric values in text)
+- Keep structure, wording, and formatting IDENTICAL
+- Ensure new numbers are consistent across question, explanation, and choices
+
+Category: {category}, Section: {section}, Difficulty: {difficulty}
+
+Sample question:
+{original_question_html}
+
+Sample explanation:
+{original_explanation}
+
+Sample choices (correct: {correct_letter}):
+{choices_text}
+
+Generate your response in this format:
+
+QUESTION:
+[Question with only numbers changed]
+
+EXPLANATION:
+[Explanation with only numbers changed]
+
+CHOICE_A:
+[First choice with only numbers changed]
+
+CHOICE_B:
+[Second choice with only numbers changed]
+
+CHOICE_C:
+[Third choice with only numbers changed]
+
+CHOICE_D:
+[Fourth choice with only numbers changed]
+
+CORRECT_ANSWER:
+[Letter of correct answer: typically {correct_letter}]
+"""
 
 
 def _build_prompt_multiple_choice(
@@ -1082,7 +1483,7 @@ def generate_new_question(
     hf_base_url: str = "https://router.huggingface.co/v1",
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
-    creative_mode: bool = True,
+    creative_mode: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Sinh câu hỏi mới, explanation và đáp án từ câu mẫu (cùng category, đúng format, chỉ đổi số liệu).
@@ -1096,13 +1497,31 @@ def generate_new_question(
         hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
         api_key: OpenAI API key (hoặc dùng OPENAI_API_KEY env var).
         model: Tên model OpenAI (mặc định: gpt-4o-mini).
-        creative_mode: Nếu True (mặc định), tạo câu hỏi mới với scenario khác nhưng test cùng skill.
-                      Nếu False, chỉ thay đổi số liệu, giữ nguyên context.
+        creative_mode: Nếu None (mặc định), tự động chọn dựa trên difficulty:
+                      - Easy: False (chỉ đổi số, giữ nguyên logic)
+                      - Medium/Hard: True (reasoning để đảm bảo giá trị hợp lý và logic đúng)
+                      Nếu set explicit = True/False, sẽ dùng giá trị đó.
 
     Returns:
         Câu hỏi mới dạng dict, cùng cấu trúc với questions_practice_test.json,
         question.question, question.explanation, question.correct_answer đều được sinh; choices có thể null.
     """
+    # Determine difficulty level and auto-set creative_mode if not specified
+    difficulty = sample.get("difficulty", "Easy").lower()
+    
+    if creative_mode is None:
+        # Strategy based on difficulty:
+        # - Easy: only change numbers (conservative mode)
+        # - Medium/Hard: use reasoning to ensure logical consistency (creative mode)
+        if difficulty == "easy":
+            creative_mode = False
+            print(f"📘 Difficulty: {difficulty.upper()} → Strategy: Conservative (only change numbers)")
+        else:  # medium or hard
+            creative_mode = True
+            print(f"📗 Difficulty: {difficulty.upper()} → Strategy: Reasoning (ensure logical consistency and reasonable values)")
+    else:
+        mode_text = "creative" if creative_mode else "conservative"
+        print(f"📙 Difficulty: {difficulty.upper()} → Strategy: {mode_text.upper()} (manually set)")
     if llm is None:
         if use_hf:
             # Use HuggingFace model via OpenAI-compatible API
@@ -1113,7 +1532,7 @@ def generate_new_question(
             llm = ChatOpenAI(
                 model=hf_model,
                 temperature=0.7 if creative_mode else 0.3,
-                api_key=hf_key,
+                api_key=hf_key,  # type: ignore
                 base_url=hf_base_url,
             )
             mode_text = "creative" if creative_mode else "conservative"
@@ -1127,7 +1546,7 @@ def generate_new_question(
             llm = ChatOpenAI(
                 model=model,
                 temperature=0.7 if creative_mode else 0.3,
-                api_key=openai_key,
+                api_key=openai_key,  # type: ignore
             )
             mode_text = "creative" if creative_mode else "conservative"
             print(f"✓ Using OpenAI model: {model} ({mode_text} mode)")
@@ -1174,6 +1593,9 @@ def generate_new_question(
             }
             
             # Dùng prompt riêng cho câu hỏi có đồ thị
+            if not correct_letter:
+                raise ValueError("Multiple-choice question requires correct_letter")
+            
             prompt_text = _build_prompt_graph_multiple_choice(
                 question_text_no_svg,
                 original_explanation,
@@ -1185,15 +1607,37 @@ def generate_new_question(
                 difficulty,
             )
             
-            # For HuggingFace models, manually parse to handle reasoning responses
+            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
-                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
-                print(raw_response)
-                cleaned_json = _clean_reasoning_response(raw_response.content)
-                result_graph = GeneratedGraphQuestionContent.model_validate_json(cleaned_json)
+                # Step 1: Get free-form output from reasoning LLM
+                freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
+                    question_text_no_svg,
+                    original_explanation,
+                    original_choices,
+                    correct_letter,
+                    graph_spec_dict,
+                    category,
+                    section,
+                    difficulty,
+                )
+                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
+                print("\n=== Reasoning LLM Output ===")
+                print(raw_response.content[:500], "...")
+                
+                # Step 2: Clean reasoning output (remove <think> tags)
+                cleaned_output = _clean_reasoning_response(raw_response.content)
+                
+                # Step 3: Format with GPT-4o into structured JSON
+                print("\n=== Formatting with GPT-4o ===")
+                result_graph = _format_with_gpt4o(
+                    cleaned_output,
+                    GeneratedGraphQuestionContent,
+                    api_key=api_key,
+                )
+                print("✓ Successfully formatted into JSON")
             else:
                 structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
-                result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(
+                result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
             
@@ -1296,6 +1740,9 @@ def generate_new_question(
                 "explanation": new_explanation,
             }
         else:
+            if not correct_letter:
+                raise ValueError("Multiple-choice question requires correct_letter")
+            
             prompt_text = _build_prompt_multiple_choice(
                 original_html,
                 original_explanation,
@@ -1305,15 +1752,37 @@ def generate_new_question(
                 section,
                 difficulty,
                 creative_mode=creative_mode,
-            )
-            # For HuggingFace models, manually parse to handle reasoning responses
+            )            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
-                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
-                cleaned_json = _clean_reasoning_response(raw_response.content)
-                result_mc = GeneratedMultipleChoiceContent.model_validate_json(cleaned_json)
+                # Step 1: Get free-form output from reasoning LLM
+                freeform_prompt = _build_prompt_multiple_choice_freeform(
+                    original_html,
+                    original_explanation,
+                    original_choices,
+                    correct_letter,
+                    category,
+                    section,
+                    difficulty,
+                    creative_mode=creative_mode,
+                )
+                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
+                print("\n=== Reasoning LLM Output ===")
+                print(raw_response.content[:500], "...")
+                
+                # Step 2: Clean reasoning output
+                cleaned_output = _clean_reasoning_response(raw_response.content)
+                
+                # Step 3: Format with GPT-4o
+                print("\n=== Formatting with GPT-4o ===")
+                result_mc = _format_with_gpt4o(
+                    cleaned_output,
+                    GeneratedMultipleChoiceContent,
+                    api_key=api_key,
+                )
+                print("✓ Successfully formatted into JSON")
             else:
                 structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
-                result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(
+                result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
             new_question_text = (result_mc.question or "").strip()
@@ -1370,14 +1839,36 @@ def generate_new_question(
                 difficulty,
             )
             
-            # For HuggingFace models, manually parse to handle reasoning responses
+            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
-                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
-                cleaned_json = _clean_reasoning_response(raw_response.content)
-                result_free_response = GeneratedGraphFreeResponseContent.model_validate_json(cleaned_json)
+                # Step 1: Get free-form output from reasoning LLM
+                freeform_prompt = _build_prompt_graph_free_response_freeform(
+                    question_text_no_svg,
+                    original_explanation,
+                    original_correct_answer,
+                    graph_spec_dict,
+                    category,
+                    section,
+                    difficulty,
+                )
+                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
+                print("\n=== Reasoning LLM Output ===")
+                print(raw_response.content[:500], "...")
+                
+                # Step 2: Clean reasoning output
+                cleaned_output = _clean_reasoning_response(raw_response.content)
+                
+                # Step 3: Format with GPT-4o
+                print("\n=== Formatting with GPT-4o ===")
+                result_free_response = _format_with_gpt4o(
+                    cleaned_output,
+                    GeneratedGraphFreeResponseContent,
+                    api_key=api_key,
+                )
+                print("✓ Successfully formatted into JSON")
             else:
                 structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
-                result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(
+                result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
             
@@ -1455,14 +1946,37 @@ def generate_new_question(
                 difficulty,
                 creative_mode=creative_mode,
             )
-            # For HuggingFace models, manually parse to handle reasoning responses
+            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
-                raw_response = llm.invoke([HumanMessage(content=prompt_text)])
-                cleaned_json = _clean_reasoning_response(raw_response.content)
-                result = GeneratedQuestionContent.model_validate_json(cleaned_json)
+                # Step 1: Get free-form output from reasoning LLM
+                freeform_prompt = _build_prompt_freeform(
+                    original_html,
+                    original_explanation,
+                    original_correct_answer,
+                    category,
+                    section,
+                    q_type,
+                    difficulty,
+                    creative_mode=creative_mode,
+                )
+                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
+                print("\n=== Reasoning LLM Output ===")
+                print(raw_response.content[:500], "...")
+                
+                # Step 2: Clean reasoning output
+                cleaned_output = _clean_reasoning_response(raw_response.content)
+                
+                # Step 3: Format with GPT-4o
+                print("\n=== Formatting with GPT-4o ===")
+                result = _format_with_gpt4o(
+                    cleaned_output,
+                    GeneratedQuestionContent,
+                    api_key=api_key,
+                )
+                print("✓ Successfully formatted into JSON")
             else:
                 structured_llm = llm.with_structured_output(GeneratedQuestionContent)
-                result: GeneratedQuestionContent = structured_llm.invoke(
+                result: GeneratedQuestionContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
             new_question_text = (result.question or "").strip()
@@ -1484,8 +1998,39 @@ def generate_new_question(
     else:
         # Chỉ có question mẫu, không có explanation/correct_answer → chỉ sinh câu hỏi (tương thích cũ)
         class QuestionOnly(BaseModel):
-            question: str = Field(description="New question content, same format with only numbers changed")
-        prompt_question_only = f"""You are an SAT question writer. Change ONLY the numerical values in the sample question below. Do NOT change wording or structure. Output the same HTML + MathML with only numbers substituted.
+            question: str = Field(description="New question content with proper HTML+MathML")
+        
+        # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
+        if use_hf:
+            # Step 1: Free-form prompt for reasoning LLM
+            freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
+
+Sample question:
+{original_html}
+
+Generate your response in this format:
+
+QUESTION:
+[Question with only numbers changed, preserving all HTML and MathML structure]
+"""
+            
+            raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
+            print("\n=== Reasoning LLM Output ===")
+            print(raw_response.content[:500], "...")
+            
+            # Step 2: Clean and format
+            cleaned_output = _clean_reasoning_response(raw_response.content)
+            
+            print("\n=== Formatting with GPT-4o ===")
+            res = _format_with_gpt4o(
+                cleaned_output,
+                QuestionOnly,
+                api_key=api_key,
+            )
+            print("✓ Successfully formatted into JSON")
+        else:
+            QuestionOnlyModel = llm.with_structured_output(QuestionOnly)
+            prompt_question_only = f"""You are an SAT question writer. Change ONLY the numerical values in the sample question below. Do NOT change wording or structure. Output the same HTML + MathML with only numbers substituted.
 
 Sample:
 ---
@@ -1493,17 +2038,9 @@ Sample:
 ---
 
 Return only the new question string (same format, numbers changed)."""
-        
-        # For HuggingFace models, manually parse to handle reasoning responses
-        if use_hf:
-            raw_response = llm.invoke([HumanMessage(content=prompt_question_only)])
-            cleaned_json = _clean_reasoning_response(raw_response.content)
-            res = QuestionOnly.model_validate_json(cleaned_json)
-        else:
-            QuestionOnlyModel = llm.with_structured_output(QuestionOnly)
             res = QuestionOnlyModel.invoke([HumanMessage(content=prompt_question_only)])
         
-        new_question_text = (res.question or "").strip()
+        new_question_text = (res.question or "").strip() if hasattr(res, 'question') else str(res).strip()  # type: ignore
         if not new_question_text:
             raise ValueError("LLM không trả về nội dung câu hỏi.")
         new_question_content = {

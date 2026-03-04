@@ -1263,6 +1263,7 @@ def generate_new_rw_question(
         
         if parsed.get("has_graph") and parsed.get("graph"):
             graph_spec = parsed["graph"]
+            print(f"Graph spec: {graph_spec.graph_type}, title: {graph_spec.title}")
             
             # Check if this is a grouped bar chart
             if graph_spec.graph_type == "grouped_bar" and graph_spec.grouped_data:

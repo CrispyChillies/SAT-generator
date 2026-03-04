@@ -1,0 +1,25 @@
+{
+  "category": "Linear Functions and Equations",
+  "difficulty": "Medium",
+  "id": "0024c1d1-b822-4c5c-8753-44d30f02e989",
+  "image_url": null,
+  "pool": "practice_test",
+  "question": {
+    "choices": [
+      "<math><mn>5</mn></math>",
+      "<math><mn>6</mn></math>",
+      "<math><mn>7</mn></math>",
+      "<math><mn>8</mn></math>"
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "Let the price of one apple be <math><mi>a</mi></math>, one banana be <math><mi>b</mi></math>, and one orange be <math><mi:o</mi></math>. From the given information, we form the equations: <math><mn>5</mn><mi>a</mi><mo>+</mo><mi>b</mi><mo>=</mo><mn>3</mn><mi:o</mi></math> and <math><mn>3</mn><mi:a</mi><mo>+</mo><mn>2</mn><mi:b</mi><mo>=</mo><mn>5</mn><mi:o</mi></math>. To eliminate <math><mi>b</mi></math>, multiply the first equation by <math><mn>2</mn></math>: <math><mn>10</mn><mi:a</mi><mo>+</mo><mi:b</mi><mo>=</mo><mn>6</mn><mi:o</mi></math>. Subtract the second equation: <math><mn>10</mn><mi:a</mi><mo>+</mo><mi:b</mi><mo>-</mo><mn>3</mn><mi:a</mi><mo>-</mo><mn>2</mn><mi:b</mi><mo>=</mo><mn>6</mn><mi:o</mi><mo>-</mo><mn>5</mn><mi:o</mi></math>, resulting in <math><mn>7</mn><mi:a</mi><mo>=</mo><mi:o</mi></math>. Thus, <math><mi:o</mi></math> equals <math><mn>7</mn><mi:a</mi></math>.",
+    "paragraph": null,
+    "question": "Five apples and one banana cost as much as three oranges. Three apples and two bananas cost as much as five oranges. The combined price of how many apples equals the price of one orange?"
+  },
+  "section": "Algebra",
+  "skill": "",
+  "subject": "Algebra",
+  "type": "multiple-choice"
+}
