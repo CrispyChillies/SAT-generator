@@ -690,11 +690,71 @@ def run_flow(
             use_hf_generator=use_hf_generator,
             hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
-            hf_generator_model=hf_generator_model,            hf_base_url=hf_base_url,            creative_mode=creative_mode,
+            hf_generator_model=hf_generator_model,            
+            hf_base_url=hf_base_url,            
+            creative_mode=creative_mode,
         )
 
 
+# ---------------------------------------------------------------------------
+# Batch Flow - Generate multiple questions from one sample
+# ---------------------------------------------------------------------------
+
+def run_flow_batch(
+    sample: Dict[str, Any],
+    count: int = 1,
+    *,
+    steps_json_path: str = "steps_function_and_meaning.json",
+    out_dir: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    verbose: bool = True,
+    use_hf_solver: bool = False,
+    use_hf_generator: bool = False,
+    hf_api_key: Optional[str] = None,
+    open_ai_api_key: Optional[str] = None,
+    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
+    hf_base_url: str = "https://router.huggingface.co/v1",
+    creative_mode: bool = True,
+):
+    """
+    Generator that runs run_flow `count` times on the same sample.
+    Yields dicts: { "index": i, "total": count, "result": <run_flow result> }
+    so callers can stream each result as it finishes.
+
+    Args:
+        sample: Single source question.
+        count: How many new questions to generate.
+        (all other kwargs forwarded to run_flow)
+    """
+    base_out = Path(out_dir) if out_dir else Path("output")
+    for i in range(count):
+        run_out_dir = base_out / f"q_{i + 1}"
+        run_out_dir.mkdir(parents=True, exist_ok=True)
+        if verbose:
+            print(f"\n{'#' * 70}")
+            print(f"# Batch {i + 1}/{count}")
+            print(f"{'#' * 70}")
+        result = run_flow(
+            sample,
+            steps_json_path=steps_json_path,
+            out_dir=str(run_out_dir),
+            api_key=api_key,
+            model=model,
+            verbose=verbose,
+            use_hf_solver=use_hf_solver,
+            use_hf_generator=use_hf_generator,
+            hf_api_key=hf_api_key,
+            open_ai_api_key=open_ai_api_key,
+            hf_generator_model=hf_generator_model,
+            hf_base_url=hf_base_url,
+            creative_mode=creative_mode,
+        )
+        yield {"index": i, "total": count, "result": result}
+
+
 def main():
+
     ap = argparse.ArgumentParser(
         description="Unified flow for generating SAT questions (Math and Reading & Writing). "
                     "Automatically detects question type and routes to appropriate generation pipeline."
@@ -713,6 +773,7 @@ def main():
     ap.add_argument("--conservative-mode", action="store_true", help="Chỉ thay đổi số liệu, giữ nguyên context (mặc định: tạo scenario mới với cùng skill)")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
+    ap.add_argument("--count", type=int, default=1, help="Số câu hỏi mới cần tạo trong một lần chạy (mặc định: 1)")
     args = ap.parse_args()
 
     sample = load_sample_question(
@@ -723,9 +784,9 @@ def main():
 
     # Set default output directory
     out_dir = args.out_dir if args.out_dir else "output"
+    count = max(1, args.count)
 
-    result = run_flow(
-        sample,
+    batch_kwargs = dict(
         steps_json_path=args.steps_json,
         out_dir=out_dir,
         model=args.model,
@@ -738,37 +799,40 @@ def main():
         creative_mode=not args.conservative_mode,
     )
 
-    if args.save_result:
-        # Save complete result (structure varies by question type)
-        with open(args.save_result, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        print(f"Đã lưu kết quả: {args.save_result}")
+    results = []
+    had_error = False
+    for item in run_flow_batch(sample, count=count, **batch_kwargs):
+        idx = item["index"]
+        total = item["total"]
+        result = item["result"]
+        results.append(result)
 
-    if result.get("error"):
-        print("Lỗi:", result["error"])
-        return 1
-    
-    # Success message
+        # tqdm-style progress bar
+        done = idx + 1
+        bar_len = 30
+        filled = int(bar_len * done / total)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        status = "✓" if not result.get("error") else "✗"
+        print(f"\n[{bar}] {done}/{total}  {status}")
+
+        if result.get("error"):
+            print(f"  Lỗi câu {done}: {result['error']}")
+            had_error = True
+
+        if args.save_result:
+            base, ext = os.path.splitext(args.save_result)
+            save_path = f"{base}_{done}{ext}" if count > 1 else args.save_result
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            print(f"  Đã lưu kết quả: {save_path}")
+
     if not args.quiet:
         print("\n" + "=" * 70)
-        print("✓ Luồng hoàn tất thành công!")
+        ok = sum(1 for r in results if not r.get("error"))
+        print(f"✓ Hoàn tất: {ok}/{count} câu được tạo thành công.")
         print("=" * 70)
-        
-        # Show what was generated
-        is_rw = is_reading_writing_question(sample)
-        if is_rw:
-            print("Generated: Reading & Writing question")
-            if result.get("new_question_item"):
-                print(f"  Output: {out_dir}/new_question.json")
-                print(f"  Validation: {out_dir}/new_question_validation.json")
-        else:
-            print("Generated: Math question")
-            if result.get("steps_json_path"):
-                print(f"  Steps: {result['steps_json_path']}")
-            if result.get("new_question_item"):
-                print(f"  Question: {out_dir}/new_question.json")
-    
-    return 0
+
+    return 1 if had_error else 0
 
 
 if __name__ == "__main__":

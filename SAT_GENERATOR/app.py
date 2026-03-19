@@ -9,14 +9,15 @@ import re
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Generator
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from generate_question_langchain import load_sample_question
-from run_flow import run_flow, preprocess_correct_answer
+from run_flow import run_flow, run_flow_batch, preprocess_correct_answer
 
 app = Flask(__name__)
 QUESTIONS_PATH = os.getenv("QUESTIONS_PATH", "questions_practice_test.json")
@@ -195,7 +196,116 @@ def api_run_flow():
     return jsonify(out)
 
 
+def _format_flow_result(result: dict) -> dict:
+    """Serialize a single run_flow result dict for the frontend (same logic as api_run_flow)."""
+    new_item = result.get("new_question_item") or {}
+    new_q_block = new_item.get("question") or {}
+    choices = new_q_block.get("choices") or []
+    correct_answer_raw = new_q_block.get("correct_answer")
+
+    if choices and isinstance(correct_answer_raw, (list, tuple)) and len(correct_answer_raw) > 0:
+        letter = (correct_answer_raw[0] or "").strip().upper()
+        idx = {"A": 0, "B": 1, "C": 2, "D": 3}.get(letter)
+        new_correct_answer_html = _normalize_math_html((choices[idx] or "").strip()) if idx is not None and idx < len(choices) else ""
+    elif isinstance(correct_answer_raw, str):
+        new_correct_answer_html = _normalize_math_html(correct_answer_raw.strip())
+    else:
+        new_correct_answer_html = ""
+
+    new_choices_html = [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
+    new_paragraph_html = _normalize_math_html((new_q_block.get("paragraph") or "").strip())
+
+    out = {
+        "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
+        "new_question_item": new_item,
+        "new_paragraph_html": new_paragraph_html,
+        "new_explanation_html": _normalize_math_html((new_q_block.get("explanation") or "").strip()),
+        "new_correct_answer_html": new_correct_answer_html,
+        "new_choices_html": new_choices_html,
+        "new_correct_answer_letter": (
+            correct_answer_raw[0]
+            if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
+            else correct_answer_raw
+        ) if correct_answer_raw else None,
+        "answer_result": None,
+        "error": result.get("error"),
+        "answers_match": None,
+    }
+
+    ar = result.get("answer_result")
+    if ar:
+        out["answer_result"] = {
+            "final_result": ar.get("final_result"),
+            "answer_text": ar.get("answer_text"),
+            "steps_detail": ar.get("steps_detail"),
+            "error": ar.get("error"),
+        }
+        # Compare C vs D answers
+        answer_from_c = ""
+        if choices and isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw:
+            idx2 = {"A": 0, "B": 1, "C": 2, "D": 3}.get((correct_answer_raw[0] or "").strip().upper())
+            if idx2 is not None and idx2 < len(choices):
+                answer_from_c = (choices[idx2] or "").strip()
+        elif isinstance(correct_answer_raw, str):
+            answer_from_c = correct_answer_raw.strip()
+        answer_from_d = str(ar.get("final_result") or "").strip()
+        out["answers_match"] = _answers_match_llm(answer_from_c, answer_from_d)
+
+    return out
+
+
+@app.route("/api/run-flow-batch", methods=["POST"])
+def api_run_flow_batch():
+    """
+    SSE endpoint — streams each generated question as it finishes.
+    Body: { "question_id": "...", "count": N }
+    Events: data: <json>\\n\\n  where json has { index, total, ...question_fields }
+            Final event: data: {"done": true}\\n\\n
+    """
+    data = request.get_json() or {}
+    question_id = (data.get("question_id") or "").strip()
+    count = max(1, int(data.get("count") or 1))
+
+    if not question_id:
+        return jsonify({"error": "Thiếu question_id"}), 400
+
+    try:
+        sample = load_sample_question(
+            questions_path=str(BASE_DIR / QUESTIONS_PATH),
+            question_id=question_id,
+        )
+    except (FileNotFoundError, ValueError) as e:
+        return jsonify({"error": str(e)}), 404
+
+    def generate() -> Generator[str, None, None]:
+        for item in run_flow_batch(
+            sample,
+            count=count,
+            out_dir=str(BASE_DIR / "output"),
+            steps_json_path="steps_function_and_meaning.json",
+            verbose=True,
+            use_hf_solver=True,
+            use_hf_generator=True,
+            creative_mode=False,
+        ):
+            payload = _format_flow_result(item["result"])
+            payload["index"] = item["index"]
+            payload["total"] = item["total"]
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        yield 'data: {"done": true}\n\n'
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.route("/api/save-question", methods=["POST"])
+
 def api_save_question():
     """Lưu câu hỏi (question + explanation + choices + correct_answer) vào file JSON trong thư mục data/."""
     data = request.get_json() or {}

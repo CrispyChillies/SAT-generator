@@ -16,11 +16,10 @@
       --accent-hover: #9bb2ff;
       --success: #6bcb7d;
       --error: #e57373;
+      --warning: #f4a261;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       font-family: "Segoe UI", system-ui, sans-serif;
@@ -31,10 +30,7 @@
       line-height: 1.5;
     }
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+    .container { max-width: 960px; margin: 0 auto; }
 
     h1 {
       font-size: 1.5rem;
@@ -48,15 +44,12 @@
       gap: 0.75rem;
       align-items: center;
       flex-wrap: wrap;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
-    .form-row label {
-      font-weight: 500;
-    }
+    .form-row label { font-weight: 500; white-space: nowrap; }
 
-    input[type="text"] {
-      width: 320px;
+    input[type="text"], input[type="number"] {
       padding: 0.6rem 0.75rem;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -65,9 +58,10 @@
       font-size: 0.95rem;
     }
 
-    input[type="text"]::placeholder {
-      color: var(--muted);
-    }
+    input[type="text"] { width: 300px; }
+    input[type="number"] { width: 80px; }
+
+    input::placeholder { color: var(--muted); }
 
     button {
       padding: 0.6rem 1rem;
@@ -76,46 +70,54 @@
       font-weight: 500;
       cursor: pointer;
       font-size: 0.95rem;
+      transition: background 0.15s, filter 0.15s;
     }
 
-    .btn-load {
-      background: var(--accent);
-      color: var(--bg);
+    .btn-load { background: var(--accent); color: var(--bg); }
+    .btn-load:hover { background: var(--accent-hover); }
+
+    .btn-flow { background: var(--surface); color: var(--accent); border: 1px solid var(--accent); }
+    .btn-flow:hover { background: rgba(124,156,255,0.12); }
+    .btn-flow:disabled, button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-save { background: var(--success); color: var(--bg); }
+    .btn-save:hover { filter: brightness(1.1); }
+
+    /* ── Progress bar ── */
+    #batchProgress { margin-bottom: 1.5rem; display: none; }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
     }
 
-    .btn-load:hover {
-      background: var(--accent-hover);
-    }
-
-    .btn-flow {
+    .progress-track {
+      height: 10px;
       background: var(--surface);
-      color: var(--accent);
-      border: 1px solid var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
     }
 
-    .btn-flow:hover {
-      background: rgba(124, 156, 255, 0.12);
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 999px;
+      transition: width 0.4s ease;
     }
 
-    .btn-flow:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .progress-status {
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: ui-monospace, monospace;
     }
 
-    .btn-save {
-      background: var(--success);
-      color: var(--bg);
-    }
-
-    .btn-save:hover {
-      filter: brightness(1.1);
-    }
-
-    .btn-save:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
+    /* ── Cards ── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -133,106 +135,113 @@
       letter-spacing: 0.05em;
     }
 
-    .card .content {
-      font-size: 0.95rem;
-      word-wrap: break-word;
-    }
-
-    .card .content p {
-      margin: 0.5rem 0;
-    }
-
-    .card .content math,
-    .card .content .math {
-      font-style: italic;
-    }
-
-    /* Styling for graphs in paragraphs */
-    .card .content figure {
-      margin: 1rem 0;
-      text-align: center;
-    }
-
-    .card .content svg {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 0 auto;
-    }
-
+    .card .content { font-size: 0.95rem; word-wrap: break-word; }
+    .card .content p { margin: 0.5rem 0; }
+    .card .content math, .card .content .math { font-style: italic; }
+    .card .content figure { margin: 1rem 0; text-align: center; }
+    .card .content svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
     .card .content .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border-width: 0;
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
     }
 
-    .loading {
-      color: var(--muted);
+    /* Generated question cards in batch */
+    .gen-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      animation: slideIn 0.3s ease;
     }
 
-    .error {
-      color: var(--error);
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    .success {
-      color: var(--success);
+    .gen-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
     }
 
-    .meta {
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-bottom: 0.5rem;
+    .gen-badge {
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
     }
 
-    #flowResult .steps {
-      margin-top: 1rem;
+    .gen-badge.error { background: var(--error); }
+
+    .gen-card h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .choices-list { list-style: none; padding-left: 0; }
+    .choice-item {
+      margin: 0.4rem 0;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
       font-size: 0.9rem;
     }
+    .choice-correct { background: rgba(107,203,125,0.15); border: 1px solid var(--success); }
+    .choice-normal  { background: var(--bg); border: 1px solid var(--border); }
 
-    #flowResult .steps summary {
-      cursor: pointer;
-    }
-
-    #flowResult .step-item {
-      margin: 0.5rem 0;
-      padding: 0.5rem;
-      background: var(--bg);
-      border-radius: 6px;
-      font-family: ui-monospace, monospace;
-      font-size: 0.85rem;
-    }
-
-    #flowResult .answer-box {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: rgba(107, 203, 125, 0.12);
+    .answer-box {
+      margin-top: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: rgba(107,203,125,0.12);
       border: 1px solid var(--success);
       border-radius: 8px;
       color: var(--success);
+      font-size: 0.9rem;
     }
 
-    .hidden {
-      display: none;
+    .steps details { margin-top: 0.75rem; font-size: 0.88rem; }
+    .steps summary { cursor: pointer; color: var(--muted); }
+    .step-item {
+      margin: 0.4rem 0;
+      padding: 0.4rem 0.6rem;
+      background: var(--bg);
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.82rem;
     }
+
+    .gen-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+
+    .loading { color: var(--muted); }
+    .error   { color: var(--error); }
+    .success { color: var(--success); }
+    .muted   { color: var(--muted); }
+    .meta    { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .hidden  { display: none; }
   </style>
 </head>
 
 <body>
   <div class="container">
     <h1>SAT Flow Demo</h1>
+
+    <!-- ── Input row ── -->
     <div class="form-row">
       <label for="questionId">Question ID</label>
       <input type="text" id="questionId" placeholder="vd: 06868720-2332-4e01-b188-4f2342bc60a9" />
+      <label for="genCount">Count</label>
+      <input type="number" id="genCount" value="1" min="1" max="20" title="Số câu hỏi cần tạo" />
       <button type="button" class="btn-load" id="btnLoad">Xem câu gốc</button>
       <button type="button" class="btn-flow" id="btnFlow" disabled>Chạy flow</button>
     </div>
 
+    <!-- ── Original question ── -->
     <div class="card" id="originalCard">
       <h2>Câu gốc (từ questions_practice_test.json)</h2>
       <div id="originalContent">
@@ -240,200 +249,276 @@
       </div>
     </div>
 
-    <div class="card hidden" id="flowResult">
-      <h2>Kết quả flow (câu hỏi mới + explanation + đáp án)</h2>
-      <div id="flowContent"></div>
-      <div id="flowActions" class="form-row" style="margin-top: 1rem; margin-bottom: 0;"></div>
+    <!-- ── Progress bar ── -->
+    <div id="batchProgress">
+      <div class="progress-label">
+        <span id="progressText">Đang chạy batch…</span>
+        <span id="progressCount">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-status" id="progressStatus"></div>
     </div>
+
+    <!-- ── Generated question cards ── -->
+    <div id="generatedCards"></div>
   </div>
 
   <script>
     const questionIdEl = document.getElementById("questionId");
-    const btnLoad = document.getElementById("btnLoad");
-    const btnFlow = document.getElementById("btnFlow");
+    const genCountEl   = document.getElementById("genCount");
+    const btnLoad      = document.getElementById("btnLoad");
+    const btnFlow      = document.getElementById("btnFlow");
     const originalContent = document.getElementById("originalContent");
-    const flowResult = document.getElementById("flowResult");
-    const flowContent = document.getElementById("flowContent");
-    const flowActions = document.getElementById("flowActions");
+
+    // Progress
+    const batchProgress  = document.getElementById("batchProgress");
+    const progressText   = document.getElementById("progressText");
+    const progressCount  = document.getElementById("progressCount");
+    const progressFill   = document.getElementById("progressFill");
+    const progressStatus = document.getElementById("progressStatus");
+
+    const generatedCards = document.getElementById("generatedCards");
 
     let currentQuestionId = null;
-    let lastFlowData = null;
 
-    function setHtml(el, html) {
-      if (html == null || html === "") {
-        el.innerHTML = "<span class=\"muted\">—</span>";
-        return;
-      }
-      el.innerHTML = html;
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
     }
 
+    function setProgress(done, total) {
+      const pct = total > 0 ? (done / total) * 100 : 0;
+      progressFill.style.width = pct + "%";
+      progressCount.textContent = `${done} / ${total}`;
+    }
+
+    // ── Load original question ──
     btnLoad.addEventListener("click", async () => {
       const id = questionIdEl.value.trim();
       if (!id) {
-        originalContent.innerHTML = "<span class=\"error\">Vui lòng nhập Question ID.</span>";
+        originalContent.innerHTML = '<span class="error">Vui lòng nhập Question ID.</span>';
         return;
       }
-      originalContent.innerHTML = "<span class=\"loading\">Đang tải...</span>";
+      originalContent.innerHTML = '<span class="loading">Đang tải...</span>';
       try {
         const r = await fetch("/api/question/" + encodeURIComponent(id));
         const data = await r.json();
         if (!r.ok) {
-          originalContent.innerHTML = "<span class=\"error\">" + (data.error || "Lỗi " + r.status) + "</span>";
+          originalContent.innerHTML = `<span class="error">${data.error || "Lỗi " + r.status}</span>`;
           btnFlow.disabled = true;
           return;
         }
         currentQuestionId = data.id;
         btnFlow.disabled = false;
+
         let html = "";
-        if (data.category || data.difficulty) {
-          html += "<div class=\"meta\">" + [data.category, data.difficulty].filter(Boolean).join(" · ") + "</div>";
-        }
-        if (data.paragraph_html) {
-          html += "<div class=\"content\" style=\"margin-bottom:1em; color:var(--muted);\">" + data.paragraph_html + "</div>";
-        }
-        html += "<strong>Câu hỏi</strong><div class=\"content\">" + (data.question_html || "—") + "</div>";
+        if (data.category || data.difficulty)
+          html += `<div class="meta">${[data.category, data.difficulty].filter(Boolean).join(" · ")}</div>`;
+        if (data.paragraph_html)
+          html += `<div class="content" style="margin-bottom:1em;color:var(--muted)">${data.paragraph_html}</div>`;
+        html += `<strong>Câu hỏi</strong><div class="content">${data.question_html || "—"}</div>`;
         if (data.choices && data.choices.length) {
-          html += "<p><strong>Đáp án đúng</strong> (" + (data.correct_answer_letter || "") + "):</p>";
-          html += "<div class=\"content\">" + (data.correct_answer_html || "—") + "</div>";
+          html += `<p><strong>Đáp án đúng</strong> (${data.correct_answer_letter || ""}):</p>`;
+          html += `<div class="content">${data.correct_answer_html || "—"}</div>`;
         } else {
-          html += "<p><strong>Đáp án đúng</strong>: <span class=\"content\">" + (data.correct_answer_html || "—") + "</span></p>";
+          html += `<p><strong>Đáp án đúng</strong>: <span class="content">${data.correct_answer_html || "—"}</span></p>`;
         }
-        html += "<p><strong>Explanation</strong></p><div class=\"content\">" + (data.explanation_html || "—") + "</div>";
+        html += `<p><strong>Explanation</strong></p><div class="content">${data.explanation_html || "—"}</div>`;
         originalContent.innerHTML = html;
       } catch (e) {
-        originalContent.innerHTML = "<span class=\"error\">Lỗi: " + e.message + "</span>";
+        originalContent.innerHTML = `<span class="error">Lỗi: ${e.message}</span>`;
         btnFlow.disabled = true;
       }
     });
 
+    // ── Run batch flow ──
     btnFlow.addEventListener("click", async () => {
       const id = currentQuestionId || questionIdEl.value.trim();
-      if (!id) {
-        flowContent.innerHTML = "<span class=\"error\">Chưa có question ID.</span>";
-        flowResult.classList.remove("hidden");
-        return;
-      }
-      flowResult.classList.remove("hidden");
-      flowContent.innerHTML = "<span class=\"loading\">Đang chạy flow (Agent → steps → gen câu mới + explanation + đáp án)...</span>";
+      const count = Math.max(1, parseInt(genCountEl.value) || 1);
+      if (!id) return;
+
+      // Reset UI
+      generatedCards.innerHTML = "";
+      batchProgress.style.display = "block";
+      progressText.textContent = `Đang tạo ${count} câu hỏi…`;
+      progressStatus.textContent = "";
+      setProgress(0, count);
       btnFlow.disabled = true;
+
       try {
-        const r = await fetch("/api/run-flow", {
+        const resp = await fetch("/api/run-flow-batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question_id: id }),
+          body: JSON.stringify({ question_id: id, count }),
         });
-        const data = await r.json();
-        btnFlow.disabled = false;
 
-        if (data.error) {
-          flowContent.innerHTML = "<span class=\"error\">" + data.error + "</span>";
+        if (!resp.ok) {
+          const err = await resp.json();
+          progressStatus.textContent = "Lỗi: " + (err.error || resp.status);
+          btnFlow.disabled = false;
           return;
         }
 
-        let html = "";
-        // Display new paragraph if it exists (may contain graph)
-        if (data.new_paragraph_html) {
-          html += "<p><strong>Paragraph mới (có thể chứa đồ thị)</strong></p>";
-          html += "<div class=\"content\" style=\"margin-bottom:1em; padding: 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border);\">" + data.new_paragraph_html + "</div>";
-        }
-        html += "<p><strong>Câu hỏi mới</strong></p>";
-        html += "<div class=\"content\">" + (data.new_question_text || "—") + "</div>";
-        if (data.new_choices_html && data.new_choices_html.length === 4) {
-          const letters = ["A", "B", "C", "D"];
-          const correctLetter = (data.new_correct_answer_letter || "").toUpperCase();
-          html += "<p><strong>4 đáp án (multiple-choice)</strong></p>";
-          html += "<ul class=\"choices-list\" style=\"list-style: none; padding-left: 0;\">";
-          data.new_choices_html.forEach((choiceHtml, i) => {
-            const letter = letters[i];
-            const isCorrect = letter === correctLetter;
-            html += "<li class=\"choice-item\" style=\"margin: 0.5rem 0; padding: 0.5rem; border-radius: 6px; " + (isCorrect ? "background: rgba(107, 203, 125, 0.15); border: 1px solid var(--success);" : "background: var(--bg); border: 1px solid var(--border);") + "\">";
-            html += "<strong>" + letter + (isCorrect ? " ✓ (đúng)" : "") + ".</strong> ";
-            html += "<span class=\"content\">" + choiceHtml + "</span>";
-            html += "</li>";
-          });
-          html += "</ul>";
-        } else if (data.new_correct_answer_html) {
-          html += "<p><strong>Đáp án (gen từ C)</strong></p>";
-          html += "<div class=\"content\">" + data.new_correct_answer_html + "</div>";
-        }
-        if (data.new_explanation_html) {
-          html += "<p><strong>Explanation (gen từ C)</strong></p>";
-          html += "<div class=\"content\">" + data.new_explanation_html + "</div>";
-        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        const ar = data.answer_result;
-        if (ar) {
-          if (ar.final_result != null) {
-            html += "<div class=\"answer-box\"><strong>Đáp án (final_result)</strong>: " + ar.final_result + "</div>";
-          }
-          if (ar.answer_text) {
-            html += "<p><strong>Answer text</strong>: " + escapeHtml(ar.answer_text) + "</p>";
-          }
-          if (ar.steps_detail && ar.steps_detail.length) {
-            html += "<details class=\"steps\"><summary>Steps (" + ar.steps_detail.length + ")</summary>";
-            ar.steps_detail.forEach((s, i) => {
-              html += "<div class=\"step-item\">";
-              html += "Step " + (s.step_number || i + 1);
-              if (s.tool_name) html += " · " + s.tool_name;
-              if (s.tool_input) html += " · " + escapeHtml(JSON.stringify(s.tool_input));
-              if (s.tool_output != null) html += " → " + s.tool_output;
-              html += "</div>";
-            });
-            html += "</details>";
-          }
-          if (ar.error) {
-            html += "<p class=\"error\">" + escapeHtml(ar.error) + "</p>";
-          }
-        } else {
-          html += "<p class=\"muted\">Không có answer_result.</p>";
-        }
-        flowContent.innerHTML = html;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
 
-        lastFlowData = data;
-        flowActions.innerHTML = "";
-        if (data.answers_match === true && data.new_question_item) {
-          const btnSave = document.createElement("button");
-          btnSave.type = "button";
-          btnSave.className = "btn-save";
-          btnSave.id = "btnSave";
-          btnSave.textContent = "Save sample";
-          btnSave.addEventListener("click", async () => {
-            btnSave.disabled = true;
-            btnSave.textContent = "Đang lưu...";
-            try {
-              const r = await fetch("/api/save-question", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ new_question_item: data.new_question_item }),
-              });
-              const res = await r.json();
-              if (r.ok && res.ok) {
-                flowActions.innerHTML = "<span class=\"success\">Đã lưu: " + escapeHtml(res.filename || res.saved_path || "OK") + "</span>";
-              } else {
-                flowActions.innerHTML = "<span class=\"error\">Lỗi: " + escapeHtml(res.error || r.status) + "</span>";
-                btnSave.disabled = false;
-                btnSave.textContent = "Save sample";
-              }
-            } catch (e) {
-              flowActions.innerHTML = "<span class=\"error\">Lỗi: " + escapeHtml(e.message) + "</span>";
-              btnSave.disabled = false;
-              btnSave.textContent = "Save sample";
+          // Parse SSE lines
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop(); // keep incomplete chunk
+
+          for (const block of lines) {
+            const dataLine = block.split("\n").find(l => l.startsWith("data:"));
+            if (!dataLine) continue;
+            let payload;
+            try { payload = JSON.parse(dataLine.slice(5).trim()); }
+            catch { continue; }
+
+            if (payload.done) {
+              progressText.textContent = "✓ Hoàn tất!";
+              progressStatus.textContent = "";
+              btnFlow.disabled = false;
+              break;
             }
-          });
-          flowActions.appendChild(btnSave);
-        } else if (data.answers_match === false) {
-          flowActions.innerHTML = "<span class=\"muted\">Đáp án C và D chưa khớp → không hiện nút Save.</span>";
+
+            const { index, total } = payload;
+            setProgress(index + 1, total);
+            progressStatus.textContent = `[${"█".repeat(Math.round(28*(index+1)/total))}${"░".repeat(28-Math.round(28*(index+1)/total))}] ${index+1}/${total}`;
+
+            // Append card immediately
+            appendQuestionCard(payload, index, total);
+          }
         }
       } catch (e) {
+        progressStatus.textContent = "Lỗi kết nối: " + e.message;
         btnFlow.disabled = false;
-        flowContent.innerHTML = "<span class=\"error\">Lỗi: " + e.message + "</span>";
       }
     });
 
-    function escapeHtml(s) {
-      const div = document.createElement("div");
-      div.textContent = s;
-      return div.innerHTML;
+    function appendQuestionCard(data, index, total) {
+      const card = document.createElement("div");
+      card.className = "gen-card";
+
+      const hasError = !!data.error;
+      const badgeClass = hasError ? "gen-badge error" : "gen-badge";
+      const badgeText = hasError ? `#${index + 1} ✗` : `#${index + 1} ✓`;
+
+      let html = `
+        <div class="gen-card-header">
+          <span class="${badgeClass}">${badgeText}</span>
+          <h3>Câu hỏi mới ${index + 1} / ${total}</h3>
+        </div>`;
+
+      if (hasError) {
+        html += `<p class="error">Lỗi: ${escapeHtml(data.error)}</p>`;
+        card.innerHTML = html;
+        generatedCards.appendChild(card);
+        return;
+      }
+
+      // Paragraph
+      if (data.new_paragraph_html) {
+        html += `<p><strong>Paragraph</strong></p>
+          <div class="content" style="margin-bottom:1em;padding:1rem;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+            ${data.new_paragraph_html}
+          </div>`;
+      }
+
+      // Question
+      html += `<p><strong>Câu hỏi</strong></p>
+        <div class="content">${data.new_question_text || "—"}</div>`;
+
+      // Choices
+      const letters = ["A", "B", "C", "D"];
+      if (data.new_choices_html && data.new_choices_html.length === 4) {
+        const correctLetter = (data.new_correct_answer_letter || "").toUpperCase();
+        html += `<p><strong>Đáp án</strong></p><ul class="choices-list">`;
+        data.new_choices_html.forEach((ch, i) => {
+          const isCorrect = letters[i] === correctLetter;
+          html += `<li class="choice-item ${isCorrect ? "choice-correct" : "choice-normal"}">
+            <strong>${letters[i]}${isCorrect ? " ✓" : ""}.</strong>
+            <span class="content">${ch}</span>
+          </li>`;
+        });
+        html += `</ul>`;
+      } else if (data.new_correct_answer_html) {
+        html += `<p><strong>Đáp án</strong></p><div class="content">${data.new_correct_answer_html}</div>`;
+      }
+
+      // Explanation
+      if (data.new_explanation_html) {
+        html += `<p><strong>Explanation</strong></p>
+          <div class="content">${data.new_explanation_html}</div>`;
+      }
+
+      // Answer result from solver
+      const ar = data.answer_result;
+      if (ar) {
+        if (ar.final_result != null)
+          html += `<div class="answer-box"><strong>Đáp án solver</strong>: ${escapeHtml(String(ar.final_result))}</div>`;
+        if (ar.steps_detail && ar.steps_detail.length) {
+          html += `<div class="steps"><details><summary>Steps (${ar.steps_detail.length})</summary>`;
+          ar.steps_detail.forEach((s, i) => {
+            html += `<div class="step-item">Step ${s.step_number || i+1}`;
+            if (s.tool_name) html += ` · ${s.tool_name}`;
+            if (s.tool_output != null) html += ` → ${escapeHtml(String(s.tool_output))}`;
+            html += `</div>`;
+          });
+          html += `</details></div>`;
+        }
+        if (ar.error) html += `<p class="error">${escapeHtml(ar.error)}</p>`;
+      }
+
+      // Match badge
+      if (data.answers_match === true) {
+        html += `<p><span class="success">✓ Đáp án C và D khớp nhau</span></p>`;
+      } else if (data.answers_match === false) {
+        html += `<p><span class="muted">✗ Đáp án C và D chưa khớp</span></p>`;
+      }
+
+      card.innerHTML = html;
+
+      // Save button
+      const actions = document.createElement("div");
+      actions.className = "gen-actions";
+      if (data.answers_match === true && data.new_question_item) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-save";
+        btn.id = `btnSave_${index}`;
+        btn.textContent = "Save sample";
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "Đang lưu…";
+          try {
+            const r = await fetch("/api/save-question", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ new_question_item: data.new_question_item }),
+            });
+            const res = await r.json();
+            if (r.ok && res.ok) {
+              actions.innerHTML = `<span class="success">Đã lưu: ${escapeHtml(res.filename || "OK")}</span>`;
+            } else {
+              actions.innerHTML = `<span class="error">Lỗi: ${escapeHtml(res.error || r.status)}</span>`;
+            }
+          } catch (e) {
+            actions.innerHTML = `<span class="error">Lỗi: ${escapeHtml(e.message)}</span>`;
+          }
+        });
+        actions.appendChild(btn);
+      }
+      card.appendChild(actions);
+      generatedCards.appendChild(card);
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   </script>
 </body>
