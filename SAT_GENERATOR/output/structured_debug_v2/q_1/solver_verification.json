@@ -1,0 +1,8 @@
+{
+  "is_solvable": true,
+  "solver_final_result": 440.0,
+  "solver_is_correct_vs_generated_answer": null,
+  "solver_error": null,
+  "answer_format": "multiple_choice",
+  "reasoning_alignment_hint": "Check generation_verification.json and Step-B trace for strategy alignment."
+}

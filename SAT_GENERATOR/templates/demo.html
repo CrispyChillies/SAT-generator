@@ -19,7 +19,9 @@
       --warning: #f4a261;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       font-family: "Segoe UI", system-ui, sans-serif;
@@ -30,7 +32,10 @@
       line-height: 1.5;
     }
 
-    .container { max-width: 960px; margin: 0 auto; }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
 
     h1 {
       font-size: 1.5rem;
@@ -47,9 +52,14 @@
       margin-bottom: 1.25rem;
     }
 
-    .form-row label { font-weight: 500; white-space: nowrap; }
+    .form-row label {
+      font-weight: 500;
+      white-space: nowrap;
+    }
 
-    input[type="text"], input[type="number"] {
+    input[type="text"],
+    input[type="number"],
+    select {
       padding: 0.6rem 0.75rem;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -58,10 +68,48 @@
       font-size: 0.95rem;
     }
 
-    input[type="text"] { width: 300px; }
-    input[type="number"] { width: 80px; }
+    input[type="text"] {
+      width: 300px;
+    }
 
-    input::placeholder { color: var(--muted); }
+    input[type="number"] {
+      width: 80px;
+    }
+
+    select {
+      min-width: 170px;
+    }
+
+    .switch-row {
+      display: flex;
+      gap: 0.9rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: -0.4rem 0 1.2rem 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .switch-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      user-select: none;
+    }
+
+    .mode-chip {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.14rem 0.52rem;
+    }
+
+    input::placeholder {
+      color: var(--muted);
+    }
 
     button {
       padding: 0.6rem 1rem;
@@ -73,18 +121,45 @@
       transition: background 0.15s, filter 0.15s;
     }
 
-    .btn-load { background: var(--accent); color: var(--bg); }
-    .btn-load:hover { background: var(--accent-hover); }
+    .btn-load {
+      background: var(--accent);
+      color: var(--bg);
+    }
 
-    .btn-flow { background: var(--surface); color: var(--accent); border: 1px solid var(--accent); }
-    .btn-flow:hover { background: rgba(124,156,255,0.12); }
-    .btn-flow:disabled, button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-load:hover {
+      background: var(--accent-hover);
+    }
 
-    .btn-save { background: var(--success); color: var(--bg); }
-    .btn-save:hover { filter: brightness(1.1); }
+    .btn-flow {
+      background: var(--surface);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .btn-flow:hover {
+      background: rgba(124, 156, 255, 0.12);
+    }
+
+    .btn-flow:disabled,
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-save {
+      background: var(--success);
+      color: var(--bg);
+    }
+
+    .btn-save:hover {
+      filter: brightness(1.1);
+    }
 
     /* ── Progress bar ── */
-    #batchProgress { margin-bottom: 1.5rem; display: none; }
+    #batchProgress {
+      margin-bottom: 1.5rem;
+      display: none;
+    }
 
     .progress-label {
       display: flex;
@@ -135,14 +210,42 @@
       letter-spacing: 0.05em;
     }
 
-    .card .content { font-size: 0.95rem; word-wrap: break-word; }
-    .card .content p { margin: 0.5rem 0; }
-    .card .content math, .card .content .math { font-style: italic; }
-    .card .content figure { margin: 1rem 0; text-align: center; }
-    .card .content svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    .card .content {
+      font-size: 0.95rem;
+      word-wrap: break-word;
+    }
+
+    .card .content p {
+      margin: 0.5rem 0;
+    }
+
+    .card .content math,
+    .card .content .math {
+      font-style: italic;
+    }
+
+    .card .content figure {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .card .content svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
     .card .content .sr-only {
-      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
     }
 
     /* Generated question cards in batch */
@@ -156,8 +259,15 @@
     }
 
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .gen-card-header {
@@ -176,7 +286,9 @@
       border-radius: 999px;
     }
 
-    .gen-badge.error { background: var(--error); }
+    .gen-badge.error {
+      background: var(--error);
+    }
 
     .gen-card h3 {
       margin: 0;
@@ -185,28 +297,48 @@
       color: var(--text);
     }
 
-    .choices-list { list-style: none; padding-left: 0; }
+    .choices-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
     .choice-item {
       margin: 0.4rem 0;
       padding: 0.5rem 0.75rem;
       border-radius: 6px;
       font-size: 0.9rem;
     }
-    .choice-correct { background: rgba(107,203,125,0.15); border: 1px solid var(--success); }
-    .choice-normal  { background: var(--bg); border: 1px solid var(--border); }
+
+    .choice-correct {
+      background: rgba(107, 203, 125, 0.15);
+      border: 1px solid var(--success);
+    }
+
+    .choice-normal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
 
     .answer-box {
       margin-top: 0.75rem;
       padding: 0.75rem 1rem;
-      background: rgba(107,203,125,0.12);
+      background: rgba(107, 203, 125, 0.12);
       border: 1px solid var(--success);
       border-radius: 8px;
       color: var(--success);
       font-size: 0.9rem;
     }
 
-    .steps details { margin-top: 0.75rem; font-size: 0.88rem; }
-    .steps summary { cursor: pointer; color: var(--muted); }
+    .steps details {
+      margin-top: 0.75rem;
+      font-size: 0.88rem;
+    }
+
+    .steps summary {
+      cursor: pointer;
+      color: var(--muted);
+    }
+
     .step-item {
       margin: 0.4rem 0;
       padding: 0.4rem 0.6rem;
@@ -216,14 +348,38 @@
       font-size: 0.82rem;
     }
 
-    .gen-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .gen-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
 
-    .loading { color: var(--muted); }
-    .error   { color: var(--error); }
-    .success { color: var(--success); }
-    .muted   { color: var(--muted); }
-    .meta    { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .hidden  { display: none; }
+    .loading {
+      color: var(--muted);
+    }
+
+    .error {
+      color: var(--error);
+    }
+
+    .success {
+      color: var(--success);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 
@@ -237,8 +393,42 @@
       <input type="text" id="questionId" placeholder="vd: 06868720-2332-4e01-b188-4f2342bc60a9" />
       <label for="genCount">Count</label>
       <input type="number" id="genCount" value="1" min="1" max="20" title="Số câu hỏi cần tạo" />
+      <label for="modelName">Model</label>
+      <select id="modelName" title="Model dùng cho OpenAI mode">
+        <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+        <option value="gpt-5-mini">gpt-5-mini</option>
+        <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+        <option value="gpt-4.1">gpt-4.1</option>
+      </select>
       <button type="button" class="btn-load" id="btnLoad">Xem câu gốc</button>
       <button type="button" class="btn-flow" id="btnFlow" disabled>Chạy flow</button>
+    </div>
+
+    <div class="switch-row">
+      <label class="switch-item" title="Bật OpenAI basic cho cả solver và generator">
+        <input type="checkbox" id="toggleOpenAIBasic" />
+        <span>OpenAI basic (both)</span>
+      </label>
+      <label class="switch-item" title="Chỉ bật OpenAI basic solver">
+        <input type="checkbox" id="toggleOpenAIBasicSolver" />
+        <span>OpenAI basic solver</span>
+      </label>
+      <label class="switch-item" title="Chỉ bật OpenAI basic generator">
+        <input type="checkbox" id="toggleOpenAIBasicGenerator" />
+        <span>OpenAI basic generator</span>
+      </label>
+      <label class="switch-item" title="Bật HuggingFace solver">
+        <input type="checkbox" id="toggleHFSolver" />
+        <span>HF solver</span>
+      </label>
+      <label class="switch-item" title="Bật HuggingFace generator">
+        <input type="checkbox" id="toggleHFGenerator" />
+        <span>HF generator</span>
+      </label>
+      <label class="switch-item" title="Creative mode (tạo scenario mới)">
+        <input type="checkbox" id="toggleCreativeMode" />
+        <span>Creative mode</span>
+      </label>
     </div>
 
     <!-- ── Original question ── -->
@@ -267,16 +457,23 @@
 
   <script>
     const questionIdEl = document.getElementById("questionId");
-    const genCountEl   = document.getElementById("genCount");
-    const btnLoad      = document.getElementById("btnLoad");
-    const btnFlow      = document.getElementById("btnFlow");
+    const genCountEl = document.getElementById("genCount");
+    const modelNameEl = document.getElementById("modelName");
+    const btnLoad = document.getElementById("btnLoad");
+    const btnFlow = document.getElementById("btnFlow");
     const originalContent = document.getElementById("originalContent");
+    const toggleOpenAIBasic = document.getElementById("toggleOpenAIBasic");
+    const toggleOpenAIBasicSolver = document.getElementById("toggleOpenAIBasicSolver");
+    const toggleOpenAIBasicGenerator = document.getElementById("toggleOpenAIBasicGenerator");
+    const toggleHFSolver = document.getElementById("toggleHFSolver");
+    const toggleHFGenerator = document.getElementById("toggleHFGenerator");
+    const toggleCreativeMode = document.getElementById("toggleCreativeMode");
 
     // Progress
-    const batchProgress  = document.getElementById("batchProgress");
-    const progressText   = document.getElementById("progressText");
-    const progressCount  = document.getElementById("progressCount");
-    const progressFill   = document.getElementById("progressFill");
+    const batchProgress = document.getElementById("batchProgress");
+    const progressText = document.getElementById("progressText");
+    const progressCount = document.getElementById("progressCount");
+    const progressFill = document.getElementById("progressFill");
     const progressStatus = document.getElementById("progressStatus");
 
     const generatedCards = document.getElementById("generatedCards");
@@ -293,6 +490,31 @@
       const pct = total > 0 ? (done / total) * 100 : 0;
       progressFill.style.width = pct + "%";
       progressCount.textContent = `${done} / ${total}`;
+    }
+
+    function getModePayload() {
+      return {
+        model: (modelNameEl.value || "gpt-4o-mini").trim(),
+        use_openai_basic: !!toggleOpenAIBasic.checked,
+        use_openai_basic_solver: !!toggleOpenAIBasicSolver.checked,
+        use_openai_basic_generator: !!toggleOpenAIBasicGenerator.checked,
+        use_hf_solver: !!toggleHFSolver.checked,
+        use_hf_generator: !!toggleHFGenerator.checked,
+        creative_mode: !!toggleCreativeMode.checked,
+      };
+    }
+
+    function formatMode(mode) {
+      if (!mode) return "mode: default";
+      const tags = [];
+      if (mode.use_openai_basic_solver) tags.push("oa-basic-solver");
+      if (mode.use_openai_basic_generator) tags.push("oa-basic-generator");
+      if (mode.use_hf_solver) tags.push("hf-solver");
+      if (mode.use_hf_generator) tags.push("hf-generator");
+      if (mode.creative_mode) tags.push("creative");
+      if (!tags.length) tags.push("default");
+      if (mode.model) tags.push(mode.model);
+      return `mode: ${tags.join(" | ")}`;
     }
 
     // ── Load original question ──
@@ -352,7 +574,11 @@
         const resp = await fetch("/api/run-flow-batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question_id: id, count }),
+          body: JSON.stringify({
+            question_id: id,
+            count,
+            ...getModePayload(),
+          }),
         });
 
         if (!resp.ok) {
@@ -391,7 +617,7 @@
 
             const { index, total } = payload;
             setProgress(index + 1, total);
-            progressStatus.textContent = `[${"█".repeat(Math.round(28*(index+1)/total))}${"░".repeat(28-Math.round(28*(index+1)/total))}] ${index+1}/${total}`;
+            progressStatus.textContent = `[${"█".repeat(Math.round(28 * (index + 1) / total))}${"░".repeat(28 - Math.round(28 * (index + 1) / total))}] ${index + 1}/${total}`;
 
             // Append card immediately
             appendQuestionCard(payload, index, total);
@@ -416,6 +642,8 @@
           <span class="${badgeClass}">${badgeText}</span>
           <h3>Câu hỏi mới ${index + 1} / ${total}</h3>
         </div>`;
+
+      html += `<div class="mode-chip">${escapeHtml(formatMode(data.mode))}</div>`;
 
       if (hasError) {
         html += `<p class="error">Lỗi: ${escapeHtml(data.error)}</p>`;
@@ -459,6 +687,25 @@
           <div class="content">${data.new_explanation_html}</div>`;
       }
 
+      // Step B trace (solver trace from phase B)
+      const stepB = data.step_b_trace;
+      if (stepB && Array.isArray(stepB.steps) && stepB.steps.length) {
+        html += `<div class="steps"><details><summary>Step B Trace (${stepB.steps.length})</summary>`;
+        if (stepB.final_result != null) {
+          html += `<div class="step-item"><strong>Final (B):</strong> ${escapeHtml(String(stepB.final_result))}</div>`;
+        }
+        stepB.steps.forEach((s, i) => {
+          const stepNo = s.step_number || (i + 1);
+          const tool = s.tool_name ? ` · ${s.tool_name}` : "";
+          const out = s.tool_output != null ? ` → ${escapeHtml(String(s.tool_output))}` : "";
+          html += `<div class="step-item">B.${stepNo}${tool}${out}</div>`;
+          if (s.thought) {
+            html += `<div class="step-item" style="white-space: pre-wrap; line-height: 1.4;">${escapeHtml(String(s.thought))}</div>`;
+          }
+        });
+        html += `</details></div>`;
+      }
+
       // Answer result from solver
       const ar = data.answer_result;
       if (ar) {
@@ -467,7 +714,7 @@
         if (ar.steps_detail && ar.steps_detail.length) {
           html += `<div class="steps"><details><summary>Steps (${ar.steps_detail.length})</summary>`;
           ar.steps_detail.forEach((s, i) => {
-            html += `<div class="step-item">Step ${s.step_number || i+1}`;
+            html += `<div class="step-item">Step ${s.step_number || i + 1}`;
             if (s.tool_name) html += ` · ${s.tool_name}`;
             if (s.tool_output != null) html += ` → ${escapeHtml(String(s.tool_output))}`;
             html += `</div>`;

@@ -169,7 +169,10 @@ def solve_with_steps(
     if not question_text:
         question_text = question
 
-    llm = ChatOpenAI(model=model, temperature=0)
+    llm_kwargs = {"model": model}
+    if "gpt-5" not in (model or "").lower():
+        llm_kwargs["temperature"] = 0
+    llm = ChatOpenAI(**llm_kwargs)
     system_prompt = (
         "You are an SAT math assistant. You must answer the question by calling IN THE CORRECT ORDER "
         "the tools specified for each step. For each step, you may call exactly one such tool with "

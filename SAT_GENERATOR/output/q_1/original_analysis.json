@@ -1,0 +1,64 @@
+{
+  "source_fields": {
+    "section": "Algebra",
+    "category": "Sequences and Series",
+    "difficulty": "Medium",
+    "type": "multiple-choice",
+    "skill": "",
+    "question_text": "What is the smallest positive perfect cube that can be written as the sum of three consecutive integers?",
+    "choices": [
+      "<math><mn>8</mn></math>",
+      "<math><mn>27</mn></math>",
+      "<math><mn>64</mn></math>",
+      "<math><mn>125</mn></math>"
+    ],
+    "correct_answer": [
+      "B"
+    ],
+    "explanation": "Sum of three consecutive integers is <math><mo>(</mo><mi>k</mi><mo>&#x2212;</mo><mn>1</mn><mo>)</mo><mo>+</mo><mi>k</mi><mo>+</mo><mo>(</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>3</mn><mi>k</mi></math>, a multiple of 3. The least cube multiple of 3 is <math><msup><mn>3</mn><mn>3</mn></msup><mo>=</mo><mn>27</mn></math>."
+  },
+  "derived_fields": {
+    "skill": "Number theory / Sequences",
+    "sub_skill": "Sums of consecutive integers and divisibility constraints",
+    "problem_family": "Representation of integers as sums of consecutive integers; constraints from divisibility and perfect powers",
+    "solve_strategy": [
+      "Model the three consecutive integers as (k-1), k, (k+1) and simplify the sum algebraically.",
+      "Use divisibility reasoning: show the sum equals 3k, so it must be divisible by 3.",
+      "Set the perfect power equal to the divisibility expression (3k = m^3) and deduce factor constraints on m.",
+      "Parameterize m by the necessary factor (m = 3t) and solve for the minimal positive integer parameter t to get the smallest cube.",
+      "Verify by constructing the actual consecutive integers corresponding to the found k and checking positivity."
+    ],
+    "reasoning_pattern": "Algebraic modeling followed by divisibility factorization and minimality argument",
+    "logic_invariants": [
+      "Sum of three consecutive integers equals 3k for some integer k.",
+      "If an integer m^3 is divisible by a prime p, then m is divisible by p (prime power divisibility).",
+      "Minimal positive solution corresponds to taking the smallest positive integer value for a free integer parameter introduced during parameterization."
+    ],
+    "changeable_parameters": [
+      "length_of_sequence (number of consecutive integers; here 3)",
+      "power_degree (e.g., square, cube, fourth power)",
+      "sign_constraint (positive only vs. allow negative)",
+      "step_size_between_terms (default 1; could be 2 for consecutive odd/even integers)",
+      "allow_zero_or_not (whether zero can appear among the consecutive integers)"
+    ],
+    "parameter_constraints": [
+      "k must be an integer; for positive sums require appropriate lower bound on k so all listed integers are positive if positivity is required",
+      "m (the base of the perfect power) must be an integer; when prime p divides m^d, m must be divisible by p",
+      "length_of_sequence >= 2 (sequence of consecutive integers must have at least two terms)",
+      "power_degree is an integer >= 2",
+      "step_size_between_terms is a positive integer"
+    ],
+    "answer_format": "option letter (multiple-choice) and integer value (perfect cube). Example: 'B (27)'. The core numeric answer format is integer (perfect cube).",
+    "rendering_notes": [
+      "Preserve MathML tags in choices and explanation exactly as given when rendering.",
+      "When presenting algebraic steps, use simple inline math or MathML consistent with the original formatting."
+    ],
+    "risk_flags": [
+      "Students may confuse 'multiple of 3' with 'multiple that is a perfect cube' and choose 3 instead of 27.",
+      "Altering sequence length or parity can change divisibility patterns; naive generalization may produce incorrect minimal values.",
+      "Allowing nonpositive integers without explicit instruction can produce smaller (negative or zero) perfect powers; must state positivity constraint if intended."
+    ]
+  },
+  "missing_source_fields": [],
+  "confidence": 0.82
+}

@@ -1,0 +1,40 @@
+{
+  "skill": "Algebra",
+  "difficulty": "Easy",
+  "question_type": "multiple-choice",
+  "problem_family": "Cost Calculation",
+  "solve_strategy": [
+    "Substitute the given value into the function",
+    "Calculate the total cost based on the monthly payment"
+  ],
+  "known_values": {
+    "months": 36,
+    "fixed_cost": 1000
+  },
+  "derived_values": {
+    "total_cost": 15400
+  },
+  "changeable_parameters": [
+    {
+      "name": "monthly_payment",
+      "role": "input",
+      "value_type": "number",
+      "current_value": 400,
+      "suggested_range": "0-1000",
+      "constraints": [
+        "monthly_payment must be a positive number"
+      ]
+    }
+  ],
+  "parameter_constraints": [
+    "monthly_payment must be less than or equal to 1000"
+  ],
+  "answer_format": "dollars",
+  "logic_invariants": [
+    "total_cost = 36 * monthly_payment + 1000"
+  ],
+  "rendering_notes": [
+    "Ensure math expressions are correctly formatted in HTML and MathML"
+  ],
+  "fallback_generation_hint": "Consider varying the monthly payment and recalculating the total cost."
+}

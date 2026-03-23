@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "step_number": 1,
+      "function_name": "multiply",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the number of months in the lease period"
+        },
+        {
+          "param": "b",
+          "meaning": "the monthly payment amount in dollars"
+        }
+      ]
+    },
+    {
+      "step_number": 2,
+      "function_name": "add",
+      "params_meaning": [
+        {
+          "param": "a",
+          "meaning": "the total cost of monthly payments over the lease period"
+        },
+        {
+          "param": "b",
+          "meaning": "the fixed initial cost in dollars"
+        }
+      ]
+    }
+  ]
+}

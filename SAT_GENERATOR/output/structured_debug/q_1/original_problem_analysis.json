@@ -1,0 +1,14 @@
+{
+  "skill": "",
+  "sub_skill": "",
+  "question_type": "",
+  "difficulty": "",
+  "core_structure": "",
+  "solve_strategy": [],
+  "logic_invariants": [],
+  "changeable_parameters": [],
+  "parameter_constraints": [],
+  "answer_format": "",
+  "rendering_notes": [],
+  "risk_flags": []
+}

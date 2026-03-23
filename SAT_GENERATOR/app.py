@@ -9,7 +9,7 @@ import re
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Generator
+from typing import Any, Dict, Generator
 
 from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 
@@ -17,7 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from generate_question_langchain import load_sample_question
-from run_flow import run_flow, run_flow_batch, preprocess_correct_answer
+from run_flow import run_flow, run_flow_batch, preprocess_correct_answer, QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL
 
 app = Flask(__name__)
 QUESTIONS_PATH = os.getenv("QUESTIONS_PATH", "questions_practice_test.json")
@@ -68,6 +68,41 @@ Are these two answers the same or equivalent? Reply with exactly one word: YES o
 DATA_DIR = BASE_DIR / "data"
 
 
+def _to_bool(value: Any, default: bool = False) -> bool:
+    """Parse booleans from JSON payload values safely."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return default
+
+
+def _extract_flow_mode(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract solver/generator mode toggles from API payload."""
+    use_hf_solver = _to_bool(data.get("use_hf_solver"), False)
+    use_hf_generator = _to_bool(data.get("use_hf_generator"), False)
+
+    use_openai_basic = _to_bool(data.get("use_openai_basic"), False)
+    use_openai_basic_solver = use_openai_basic or _to_bool(data.get("use_openai_basic_solver"), False)
+    use_openai_basic_generator = use_openai_basic or _to_bool(data.get("use_openai_basic_generator"), False)
+
+    model = (data.get("model") or "gpt-4o-mini").strip()
+    creative_mode = _to_bool(data.get("creative_mode"), False)
+
+    return {
+        "use_hf_solver": use_hf_solver,
+        "use_hf_generator": use_hf_generator,
+        "use_openai_basic_solver": use_openai_basic_solver,
+        "use_openai_basic_generator": use_openai_basic_generator,
+        "model": model,
+        "creative_mode": creative_mode,
+    }
+
+
 @app.route("/")
 def index():
     return render_template("demo.html")
@@ -115,7 +150,7 @@ def get_question(question_id: str):
 
 @app.route("/api/run-flow", methods=["POST"])
 def api_run_flow():
-    """Chạy run_flow với question_id trong body. Trả về new_question_text + answer_result."""
+    """Chạy run_flow với question_id và mode toggles trong body. Trả về new_question_text + answer_result."""
     data = request.get_json() or {}
     question_id = (data.get("question_id") or "").strip()
     if not question_id:
@@ -131,14 +166,22 @@ def api_run_flow():
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
 
+    mode_cfg = _extract_flow_mode(data)
+
     result = run_flow(
         sample,
         out_dir=str(BASE_DIR),
         steps_json_path="steps_function_and_meaning.json",
         verbose=True,
-        use_hf_solver=True,
-        use_hf_generator=True,
-        creative_mode=False,
+        use_hf_solver=mode_cfg["use_hf_solver"],
+        use_hf_generator=mode_cfg["use_hf_generator"],
+        use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
+        use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
+        model=mode_cfg["model"],
+        hf_api_key=QWEN_API_KEY,
+        hf_generator_model=QWEN_MODEL,
+        hf_base_url=QWEN_BASE_URL,
+        creative_mode=mode_cfg["creative_mode"],
     )
 
     # Chuẩn hóa để JSON (bỏ object không serialize được nếu có)
@@ -161,6 +204,8 @@ def api_run_flow():
     new_paragraph_html = _normalize_math_html((new_q_block.get("paragraph") or "").strip())
     out = {
         "steps_json_path": result.get("steps_json_path"),
+        "mode": mode_cfg,
+        "step_b_trace": result.get("step_b_trace"),
         "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
         "new_question_item": new_item,
         "new_paragraph_html": new_paragraph_html,
@@ -218,6 +263,7 @@ def _format_flow_result(result: dict) -> dict:
     out = {
         "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
         "new_question_item": new_item,
+        "step_b_trace": result.get("step_b_trace"),
         "new_paragraph_html": new_paragraph_html,
         "new_explanation_html": _normalize_math_html((new_q_block.get("explanation") or "").strip()),
         "new_correct_answer_html": new_correct_answer_html,
@@ -259,12 +305,13 @@ def api_run_flow_batch():
     """
     SSE endpoint — streams each generated question as it finishes.
     Body: { "question_id": "...", "count": N }
-    Events: data: <json>\\n\\n  where json has { index, total, ...question_fields }
+        Events: data: <json>\n\n  where json has { index, total, mode, ...question_fields }
             Final event: data: {"done": true}\\n\\n
     """
     data = request.get_json() or {}
     question_id = (data.get("question_id") or "").strip()
     count = max(1, int(data.get("count") or 1))
+    mode_cfg = _extract_flow_mode(data)
 
     if not question_id:
         return jsonify({"error": "Thiếu question_id"}), 400
@@ -284,13 +331,21 @@ def api_run_flow_batch():
             out_dir=str(BASE_DIR / "output"),
             steps_json_path="steps_function_and_meaning.json",
             verbose=True,
-            use_hf_solver=True,
-            use_hf_generator=True,
-            creative_mode=False,
+            use_hf_solver=mode_cfg["use_hf_solver"],
+            use_hf_generator=mode_cfg["use_hf_generator"],
+            use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
+            use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
+            model=mode_cfg["model"],
+            hf_api_key=QWEN_API_KEY,
+            hf_generator_model=QWEN_MODEL,
+            hf_base_url=QWEN_BASE_URL,
+            creative_mode=mode_cfg["creative_mode"],
+            debug_stage_c=True
         ):
             payload = _format_flow_result(item["result"])
             payload["index"] = item["index"]
             payload["total"] = item["total"]
+            payload["mode"] = mode_cfg
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         yield 'data: {"done": true}\n\n'
 

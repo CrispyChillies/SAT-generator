@@ -1,0 +1,45 @@
+{
+  "source_fields": {
+    "section": "Math",
+    "category": "Algebra",
+    "difficulty": "Easy",
+    "type": "multiple-choice",
+    "skill": "",
+    "question_text": "<p style=\"text-align: left;\">The total cost <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math>, in dollars, to lease a car for <math alttext=\"36\"><mn>36</mn>\n</math> months from a particular car dealership is given by <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,000\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mn>36</mn></mrow><mi>x</mi><mo>+</mo><mrow><mn>1,000</mn></mrow></math>, where <math alttext=\"x\"><mi>x</mi>\n</math> is the monthly payment, in dollars. What is the total cost to lease a car when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mrow><mn>400</mn></mrow></math>?</p>",
+    "choices": [
+      "<p><math alttext=\"dollar sign 13,400\"><mo>$</mo><mn>13,400</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 13,000\"><mo>$</mo><mn>13,000</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 15,400\"><mo>$</mo><mn>15,400</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 37,400\"><mo>$</mo><mrow><mn>37,400</mn></mrow></math></p>"
+    ],
+    "correct_answer": [
+      "C"
+    ],
+    "explanation": "<p>Choice C is correct. It's given that <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> is the total cost, in dollars, to lease a car from this dealership with a monthly payment of <math alttext=\"x\"><mi>x</mi>\n</math> dollars. Therefore, the total cost, in dollars, to lease the car when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mn>400</mn></math> is represented by the value of <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> when <math alttext=\"x equals 400\"><mi>x</mi><mo>=</mo><mn>400</mn></math>. Substituting <math alttext=\"400\"><mn>400</mn>\n</math> for <math alttext=\"x\"><mi>x</mi>\n</math> in the equation <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,000\"><mi>f</mi><mfenced><mi>x</mi></mfenced><mo>=</mo><mn>36</mn><mi>x</mi><mo>+</mo><mn>1,000</mn></math> yields <math alttext=\"f left parenthesis 400 right parenthesis equals 36 left parenthesis 400 right parenthesis plus 1,000\"><mo>&nbsp;</mo><mi>f</mi><mfenced><mn>400</mn></mfenced><mo>=</mo><mn>36</mn><mfenced><mn>400</mn></mfenced><mo>+</mo><mn>1,000</mn></math>, or <math alttext=\"f left parenthesis 400 right parenthesis equals 15,400\"><mi>f</mi><mfenced><mn>400</mn></mfenced><mo>=</mo><mn>15,400</mn></math>. Thus, when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mn>400</mn></math>, the total cost to lease a car is&nbsp;<math alttext=\"dollar sign 15,400\"><mo>$</mo><mn>15,400</mn></math>.&nbsp;</p>\n<p>Choice A is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice B is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice D is incorrect and may result from conceptual or calculation errors.</p>"
+  },
+  "derived_fields": {
+    "skill": "Algebra",
+    "sub_skill": "Function Evaluation",
+    "problem_family": "Linear Functions",
+    "solve_strategy": [
+      "Substitute the value of x into the function",
+      "Perform arithmetic operations"
+    ],
+    "reasoning_pattern": "Evaluate a linear function at a specific point",
+    "logic_invariants": [
+      "The total cost is a linear function of the monthly payment",
+      "The cost increases linearly with the monthly payment"
+    ],
+    "changeable_parameters": [
+      "x (monthly payment)"
+    ],
+    "parameter_constraints": [
+      "x must be a positive dollar amount"
+    ],
+    "answer_format": "dollar amount",
+    "rendering_notes": [],
+    "risk_flags": []
+  },
+  "missing_source_fields": [],
+  "confidence": 1.0
+}

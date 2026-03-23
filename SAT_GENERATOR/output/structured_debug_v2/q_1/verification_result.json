@@ -1,0 +1,14 @@
+{
+  "is_solvable": false,
+  "answer_format_valid": false,
+  "reasoning_alignment": "The question is not solvable as it lacks multiple-choice options and a correct answer.",
+  "multiple_choice_unique_correct": null,
+  "distractor_quality": null,
+  "verification_notes": [
+    "The generated instance does not provide multiple-choice options, which is required for a multiple-choice question.",
+    "The correct answer and correct answer letter are also missing."
+  ],
+  "corrected_correct_answer_letter": null,
+  "corrected_correct_answer": null,
+  "confidence": 0.0
+}

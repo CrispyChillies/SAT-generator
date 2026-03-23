@@ -20,8 +20,9 @@ import matplotlib.pyplot as plt
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -104,6 +105,288 @@ class GeneratedGraphFreeResponseContent(BaseModel):
             if len(x_values) != len(v):
                 raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
         return v
+
+
+class SourceMetadata(BaseModel):
+    """Fields copied directly from the input sample (no inference)."""
+    section: str = ""
+    category: str = ""
+    difficulty: str = ""
+    type: str = ""
+    skill: str = ""
+    question_text: str = ""
+    choices: List[str] = Field(default_factory=list)
+    correct_answer: Any = None
+    explanation: str = ""
+
+
+class DerivedAnalysis(BaseModel):
+    """Fields inferred from mathematical analysis."""
+    skill: str = ""
+    sub_skill: str = ""
+    problem_family: str = ""
+    solve_strategy: List[str] = Field(default_factory=list)
+    reasoning_pattern: str = ""
+    logic_invariants: List[str] = Field(default_factory=list)
+    changeable_parameters: List[str] = Field(default_factory=list)
+    parameter_constraints: List[str] = Field(default_factory=list)
+    answer_format: str = ""
+    rendering_notes: List[str] = Field(default_factory=list)
+    risk_flags: List[str] = Field(default_factory=list)
+
+
+class ProblemAnalysis(BaseModel):
+    """Analysis artifact with explicit source vs derived separation."""
+    source_fields: SourceMetadata
+    derived_fields: DerivedAnalysis
+    missing_source_fields: List[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+
+class BlueprintParameter(BaseModel):
+    """A parameter in the math blueprint that can be varied safely."""
+    name: str
+    role: str = ""
+    value_type: str = "number"
+    current_value: Any = None
+    suggested_range: str = ""
+    constraints: List[str] = Field(default_factory=list)
+
+
+class ProblemBlueprint(BaseModel):
+    """Blueprint combining copied source metadata with inferred analysis."""
+    source_metadata: SourceMetadata
+    derived_analysis: DerivedAnalysis
+    known_values: Dict[str, Any] = Field(default_factory=dict)
+    derived_values: Dict[str, Any] = Field(default_factory=dict)
+    changeable_parameters: List[BlueprintParameter] = Field(default_factory=list)
+    generation_guidance: List[str] = Field(default_factory=list)
+    fallback_generation_hint: str = ""
+
+
+class StructuredGeneratedInstance(BaseModel):
+    """Generated instance produced from blueprint."""
+    question: str
+    explanation: str
+    choices: Optional[List[str]] = None
+    correct_answer_letter: Optional[Literal["A", "B", "C", "D"]] = None
+    correct_answer: Optional[str] = None
+    parameter_values: Dict[str, Any] = Field(default_factory=dict)
+    derivation_summary: str = ""
+
+
+class GenerationVerificationReport(BaseModel):
+    """Verification output for generated instance quality and consistency."""
+    is_solvable: bool
+    answer_format_valid: bool
+    reasoning_alignment: str = ""
+    multiple_choice_unique_correct: Optional[bool] = None
+    distractor_quality: Optional[str] = None
+    verification_notes: List[str] = Field(default_factory=list)
+    corrected_correct_answer_letter: Optional[Literal["A", "B", "C", "D"]] = None
+    corrected_correct_answer: Optional[str] = None
+    confidence: float = 0.0
+
+
+def _build_input_snapshot(
+    sample: Dict[str, Any],
+    *,
+    original_question_html: str,
+    original_explanation: str,
+    original_correct_answer: str,
+    original_choices: List[str],
+    correct_letter: Optional[str],
+    has_graph: bool,
+) -> Dict[str, Any]:
+    q_block = sample.get("question") or {}
+    raw_correct_answer = q_block.get("correct_answer")
+    if raw_correct_answer is None:
+        raw_correct_answer = sample.get("correct_answer")
+
+    source_metadata = {
+        "section": sample.get("section", ""),
+        "category": sample.get("category", ""),
+        "difficulty": sample.get("difficulty", ""),
+        "type": sample.get("type", ""),
+        "skill": sample.get("skill", ""),
+        "question_text": original_question_html,
+        "choices": original_choices,
+        "correct_answer": raw_correct_answer,
+        "explanation": original_explanation,
+    }
+
+    return {
+        "id": sample.get("id"),
+        "source_metadata": source_metadata,
+        "has_graph": has_graph,
+        "source_fields_present": [k for k, v in source_metadata.items() if v not in (None, "", [])],
+        "correct_answer_letter": correct_letter,
+        "correct_answer_content": original_correct_answer,
+    }
+
+
+def _build_problem_analysis_prompt(
+    input_snapshot: Dict[str, Any],
+    step_b_trace: Optional[Dict[str, Any]] = None,
+) -> str:
+    trace_preview = ""
+    if step_b_trace:
+        trace_preview = json.dumps(
+            {
+                "final_result": step_b_trace.get("final_result"),
+                "is_correct": step_b_trace.get("is_correct"),
+                "first_steps": (step_b_trace.get("steps") or [])[:2],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return f"""You are an SAT Math analyst.
+
+Analyze the original problem deeply and return a structured JSON analysis.
+
+Requirements:
+- Copy source_fields directly from input_snapshot.source_metadata. Do not rewrite or invent these fields.
+- Infer ONLY derived_fields from the math logic.
+- Infer missing skill/sub_skill/problem_family/solve_strategy/reasoning_pattern if needed.
+- Keep logic_invariants and parameter constraints explicit.
+- Keep answer_format explicit (fraction, integer, option letter, coordinate, etc.).
+- Identify generation_knobs that can produce a genuinely new question while preserving the same skill family.
+- Distinguish safe_variations from unsafe_variations.
+- Include novelty_opportunities and validation_rules for downstream generation.
+
+
+Input snapshot:
+{json.dumps(input_snapshot, ensure_ascii=False, indent=2)}
+
+Optional solver trace from Step B (may help infer strategy):
+{trace_preview or "(none)"}
+
+Return ONLY a JSON object matching the target schema.
+"""
+
+
+def _build_problem_blueprint_prompt(
+    input_snapshot: Dict[str, Any],
+    analysis: ProblemAnalysis,
+) -> str:
+    return f"""You are building a SAT Math problem blueprint from analysis.
+
+Build a reusable blueprint for generation.
+
+Blueprint requirements:
+- Preserve fixed context fields from the sample: section, category, difficulty, type, and skill if present.
+- Treat original question_text, choices, explanation, and correct_answer as reference examples, not immutable text.
+- Build a reusable generation blueprint from the mathematical structure, not from the literal wording.
+- Preserve reasoning family and core invariants, not surface phrasing.
+- Capture safe generation knobs, forbidden variations, and validation rules.
+- The blueprint must support producing a new instance that is mathematically valid and materially different from the source.
+
+Input snapshot:
+{json.dumps(input_snapshot, ensure_ascii=False, indent=2)}
+
+Analysis:
+{json.dumps(analysis.model_dump(), ensure_ascii=False, indent=2)}
+
+Rules:
+- Include must_change fields for generation.
+- Include allowed_variations and forbidden_variations.
+- Include instance_acceptance_rules for novelty and mathematical validity.
+- Prefer structural generation over number substitution.
+- Add a fallback_generation_hint for robust generation.
+
+
+Return ONLY a JSON object matching the target schema.
+"""
+
+
+def _build_structured_instance_prompt(
+    input_snapshot: Dict[str, Any],
+    analysis: ProblemAnalysis,
+    blueprint: ProblemBlueprint,
+    *,
+    creative_mode: bool,
+) -> str:
+    generation_mode = "new scenario with same solving logic" if creative_mode else "conservative parameter variation"
+    return f"""You are an SAT Math generator.
+
+Generate ONE new problem instance from the provided blueprint.
+
+Generation mode: {generation_mode}
+
+Hard requirements:
+- Generate a mathematically valid NEW instance, not a paraphrase of the source.
+- Preserve the problem family and reasoning invariants, but regenerate the question text, explanation, choices, and answer from the blueprint.
+- Change at least one meaningful generation knob from the blueprint.
+- Re-derive the invariant for the new instance before deciding the answer.
+- Determine the correct answer first, then construct choices around that answer.
+- If the chosen variation changes the structure (for example, changing the number of consecutive terms), recompute all divisibility and representability conditions from scratch.
+- Do not copy the original wording unless a field is explicitly marked fixed metadata.
+- Reject trivial restatements of the original problem.
+
+Novelty rules:
+- The generated question must differ semantically from the original, not just lexically.
+- At least one of these must change: target quantity, answer value, number of terms, task form, or choice set.
+- If the final numeric answer remains unchanged, then the task form and choice design must change substantially.
+
+Math consistency rules:
+- Produce an internal witness or derivation that proves the correct answer is attainable.
+- Ensure all distractors are incorrect under the same derived invariant.
+- Ensure explanation matches the generated instance, not the source.
+
+
+Original input snapshot:
+{json.dumps(input_snapshot, ensure_ascii=False, indent=2)}
+
+Analysis:
+{json.dumps(analysis.model_dump(), ensure_ascii=False, indent=2)}
+
+Blueprint:
+{json.dumps(blueprint.model_dump(), ensure_ascii=False, indent=2)}
+
+Return ONLY a JSON object matching the target schema.
+"""
+
+
+def _build_structured_verification_prompt(
+    input_snapshot: Dict[str, Any],
+    analysis: ProblemAnalysis,
+    blueprint: ProblemBlueprint,
+    instance: StructuredGeneratedInstance,
+) -> str:
+    return f"""You are a SAT Math verifier.
+
+Validate the generated instance against the original skill and blueprint.
+
+Check:
+- solvability
+- answer format validity
+- alignment with intended solving strategy
+- if multiple-choice: unique correct answer and distractor quality
+- consistency with source_metadata and derived_analysis
+
+Important interpretation rules:
+- source_metadata fields like section/category/difficulty/type/skill are fixed context and must remain consistent.
+- Numerical values in the generated problem are allowed to change when they are valid changeable parameters under derived_analysis/blueprint constraints.
+- Do NOT mark a problem unsolvable merely because coefficients/constants differ from the original sample.
+- If choices are present in the generated instance JSON, treat the question as multiple-choice and evaluate choice consistency accordingly.
+
+If needed, provide corrected correct answer fields.
+
+Original input snapshot:
+{json.dumps(input_snapshot, ensure_ascii=False, indent=2)}
+
+Analysis:
+{json.dumps(analysis.model_dump(), ensure_ascii=False, indent=2)}
+
+Blueprint:
+{json.dumps(blueprint.model_dump(), ensure_ascii=False, indent=2)}
+
+Generated instance:
+{json.dumps(instance.model_dump(), ensure_ascii=False, indent=2)}
+
+Return ONLY a JSON object matching the target schema.
+"""
 
 # ---------------------------------------------------------------------------
 # Utility functions cho xử lý đồ thị
@@ -1251,6 +1534,448 @@ Return ONLY the JSON object. Do NOT include any explanation or markdown code blo
     return result  # type: ignore
 
 
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    """Extract and parse the first JSON object from model output."""
+    cleaned = (text or "").strip()
+    cleaned = re.sub(r"^```(?:json)?", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"```$", "", cleaned).strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return json.loads(cleaned[start : end + 1])
+
+    raise ValueError("Model output does not contain valid JSON object")
+
+
+def _invoke_openai_basic_structured(
+    *,
+    prompt_text: str,
+    output_schema: type[BaseModel],
+    api_key: str,
+    model: str,
+    temperature: float,
+    debug_stage_c: bool = False,
+) -> Any:
+    """Direct OpenAI inference with strict system prompt and Pydantic validation."""
+
+    def _supports_custom_temperature(model_name: str) -> bool:
+        return "gpt-5" not in (model_name or "").lower()
+
+    required_fields = set(output_schema.model_json_schema().get("required", []))
+    model_field_names = set(output_schema.model_fields.keys())
+
+    def _properties_looks_like_payload(props: Any) -> bool:
+        if not isinstance(props, dict):
+            return False
+        if model_field_names and not (set(props.keys()) & model_field_names):
+            return False
+
+        # If nested values look like schema metadata blocks, treat as schema.
+        schema_meta_hits = 0
+        for value in props.values():
+            if isinstance(value, dict) and ({"type", "description", "title"} & set(value.keys())):
+                schema_meta_hits += 1
+        return schema_meta_hits == 0
+
+    def _has_required_field(obj: Any) -> bool:
+        if not isinstance(obj, dict) or not required_fields:
+            return False
+        return any(field in obj for field in required_fields)
+
+    def _looks_like_schema_object(obj: Any) -> bool:
+        if not isinstance(obj, dict):
+            return False
+        if "$schema" in obj or "$defs" in obj:
+            return True
+        props = obj.get("properties")
+        if _properties_looks_like_payload(props):
+            return False
+
+        # Treat explicit schema object as schema only when properties do not look like payload.
+        if obj.get("type") == "object" and "properties" in obj:
+            return True
+
+        # Common schema/template shape returned by models: description/title/properties,
+        # but no required payload fields like question/explanation.
+        schemaish_keys = {"type", "properties", "required", "title", "description"}
+        if not _has_required_field(obj) and len(schemaish_keys.intersection(obj.keys())) >= 2:
+            return True
+
+        return False
+
+    def _candidate_payloads(obj: Any) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+        if isinstance(obj, dict):
+            candidates.append(obj)
+
+            # If the response nests payload under model/class-like key.
+            class_key = output_schema.__name__
+            nested_by_class = obj.get(class_key)
+            if isinstance(nested_by_class, dict):
+                candidates.append(nested_by_class)
+
+            # Common pattern from some models: payload nested under "properties".
+            props = obj.get("properties")
+            if _properties_looks_like_payload(props):
+                # Some responses split fields between outer object and properties payload.
+                merged = dict(props)
+                for field_name in model_field_names:
+                    if field_name in obj and field_name not in merged:
+                        merged[field_name] = obj[field_name]
+                candidates.append(merged)
+                candidates.append(props)
+
+            # Common wrapper keys returned by LLM tools/parsers.
+            for key in ("output", "result", "data", "json", "instance", "payload", "value", "response"):
+                nested = obj.get(key)
+                if isinstance(nested, dict):
+                    candidates.append(nested)
+
+            # If dict has one nested object only, it is often the actual payload.
+            if len(obj) == 1:
+                only_val = next(iter(obj.values()))
+                if isinstance(only_val, dict):
+                    candidates.append(only_val)
+
+        # Prefer candidates that contain at least one required field.
+        prioritized = [c for c in candidates if _has_required_field(c)]
+        fallback = [c for c in candidates if c not in prioritized]
+        return prioritized + fallback
+
+    def _sanitize_prompt_text(text: str) -> str:
+        # Remove control characters that can break downstream JSON parsing in API gateways.
+        cleaned = (text or "").replace("\x00", " ")
+        cleaned = re.sub(r"[\x01-\x08\x0B\x0C\x0E-\x1F]", " ", cleaned)
+        # Replace invalid Unicode sequences conservatively.
+        cleaned = cleaned.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+        return cleaned
+
+    client = OpenAI(api_key=api_key)
+    schema_json = json.dumps(output_schema.model_json_schema(), ensure_ascii=False, indent=2)
+    required_list = ", ".join(sorted(required_fields)) if required_fields else "(none)"
+    minimal_skeleton = {k: "" for k in sorted(required_fields)} if required_fields else {}
+    system_prompt = f"""You are an SAT question writer.
+
+Return ONE valid JSON object only, with no markdown and no extra text.
+The JSON object must be AN INSTANCE that matches this schema:
+{schema_json}
+
+Rules:
+- Preserve HTML and MathML tags exactly where present.
+- Do not include reasoning or <think> tags.
+- Do not include code fences.
+- NEVER output a JSON Schema (no "properties", "required", "$schema", "$defs").
+- Required fields that MUST appear at top level: {required_list}
+- Minimal shape reminder: {json.dumps(minimal_skeleton, ensure_ascii=False)}
+"""
+    system_prompt = _sanitize_prompt_text(system_prompt)
+    last_error = ""
+    last_raw = ""
+    last_parsed_keys: List[str] = []
+
+    for attempt in range(3):
+        attempt_temp = temperature if attempt == 0 else 0.0
+        if attempt == 0:
+            user_prompt = prompt_text
+        else:
+            user_prompt = (
+                f"{prompt_text}\n\n"
+                "Your previous output was invalid. "
+                "Return ONLY a JSON INSTANCE matching the schema fields exactly. "
+                "Do not return schema metadata. "
+                f"Required top-level fields: {required_list}."
+            )
+
+        user_prompt = _sanitize_prompt_text(user_prompt)
+
+        try:
+            request_kwargs: Dict[str, Any] = {
+                "model": model,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            }
+            if _supports_custom_temperature(model):
+                request_kwargs["temperature"] = attempt_temp
+            completion = client.chat.completions.create(**request_kwargs)
+        except Exception as e:
+            last_error = (
+                f"OpenAI request failed on attempt {attempt + 1}: {e} "
+                f"(system_len={len(system_prompt)}, user_len={len(user_prompt)})"
+            )
+            continue
+        raw = completion.choices[0].message.content or "{}"
+
+        if debug_stage_c:
+            schema_name = output_schema.__name__
+            print("\n" + "=" * 70)
+            print(f"STAGE C RAW RESPONSE [{schema_name}] attempt {attempt + 1}")
+            print("=" * 70)
+            print(raw)
+        last_raw = raw
+
+        try:
+            parsed = _extract_json_object(raw)
+            if isinstance(parsed, dict):
+                last_parsed_keys = list(parsed.keys())[:20]
+        except Exception as e:
+            last_error = f"JSON parse error: {e}"
+            continue
+
+        if _looks_like_schema_object(parsed):
+            last_error = "Model returned a JSON Schema object instead of a payload instance"
+            continue
+
+        for candidate in _candidate_payloads(parsed):
+            if _looks_like_schema_object(candidate):
+                last_error = "Model returned schema-like candidate instead of payload instance"
+                continue
+
+            try:
+                return output_schema.model_validate(candidate)
+            except ValidationError as ve:
+                last_error = str(ve)
+
+    raise ValueError(
+        "OpenAI basic structured output validation failed after retries. "
+        f"Last error: {last_error}. "
+        f"Last parsed top-level keys: {last_parsed_keys}. "
+        f"Last raw output (first 500 chars): {(last_raw or '')[:500]}"
+    )
+
+
+def _invoke_structured(
+    *,
+    prompt_text: str,
+    output_schema: type[BaseModel],
+    llm: Optional[ChatOpenAI],
+    use_openai_basic: bool,
+    api_key: Optional[str],
+    model: str,
+    temperature: float,
+    debug_stage_c: bool = False,
+) -> Any:
+    """Invoke OpenAI model for strict structured output (LangChain or basic chat-completions)."""
+    if use_openai_basic:
+        if not api_key:
+            raise ValueError("Need OPENAI_API_KEY for openai_basic structured call")
+        return _invoke_openai_basic_structured(
+            prompt_text=prompt_text,
+            output_schema=output_schema,
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+            debug_stage_c=debug_stage_c,
+        )
+
+    if llm is None:
+        raise ValueError("LLM is not initialized for structured LangChain mode")
+    structured_llm = llm.with_structured_output(output_schema)
+    return structured_llm.invoke([HumanMessage(content=prompt_text)])
+
+
+def _validate_mc_instance(
+    *,
+    choices: Optional[List[str]],
+    correct_letter: Optional[str],
+) -> None:
+    if choices is None or len(choices) != 4:
+        raise ValueError("Multiple-choice generated instance must have exactly 4 choices")
+    if not correct_letter or correct_letter not in ("A", "B", "C", "D"):
+        raise ValueError("Multiple-choice generated instance must have correct_answer_letter in A/B/C/D")
+
+
+def _try_generate_structured_openai(
+    *,
+    sample: Dict[str, Any],
+    llm: Optional[ChatOpenAI],
+    use_openai_basic: bool,
+    api_key: Optional[str],
+    model: str,
+    creative_mode: bool,
+    original_html: str,
+    original_explanation: str,
+    original_choices: List[str],
+    original_correct_answer: str,
+    correct_letter: Optional[str],
+    q_type: str,
+    difficulty: str,
+    section: str,
+    category: str,
+    graph_spec: Any,
+    step_b_trace: Optional[Dict[str, Any]] = None,
+    debug_stage_c: bool = False,
+) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """Generate a new question through analysis-blueprint-instance-verification.
+
+    Returns:
+        (new_item_or_none, artifacts)
+    """
+    artifacts: Dict[str, Any] = {
+        "pipeline": "structured_openai_v1",
+        "status": "started",
+        "mode": "openai_basic" if use_openai_basic else "openai_structured",
+    }
+
+    has_graph = graph_spec is not None and hasattr(graph_spec, "x_values") and bool(graph_spec.x_values)
+    if has_graph:
+        artifacts["status"] = "fallback"
+        artifacts["reason"] = "graph_questions_use_legacy_generator"
+        return None, artifacts
+
+    is_multiple_choice = q_type == "multiple-choice" and len(original_choices) == 4 and bool(correct_letter)
+    input_snapshot = _build_input_snapshot(
+        sample,
+        original_question_html=original_html,
+        original_explanation=original_explanation,
+        original_correct_answer=original_correct_answer,
+        original_choices=original_choices,
+        correct_letter=correct_letter,
+        has_graph=has_graph,
+    )
+    artifacts["input_snapshot"] = input_snapshot
+
+    temp = 0.7 if creative_mode else 0.3
+
+    try:
+        analysis_prompt = _build_problem_analysis_prompt(input_snapshot, step_b_trace=step_b_trace)
+        analysis = _invoke_structured(
+            prompt_text=analysis_prompt,
+            output_schema=ProblemAnalysis,
+            llm=llm,
+            use_openai_basic=use_openai_basic,
+            api_key=api_key,
+            model=model,
+            temperature=0.2,
+            debug_stage_c=debug_stage_c,
+        )
+
+        # Force source_fields to match actual sample extraction and avoid model hallucinated source metadata.
+        analysis.source_fields = SourceMetadata.model_validate(input_snapshot.get("source_metadata") or {})
+        artifacts["analysis"] = analysis.model_dump()
+
+        blueprint_prompt = _build_problem_blueprint_prompt(input_snapshot, analysis)
+        blueprint = _invoke_structured(
+            prompt_text=blueprint_prompt,
+            output_schema=ProblemBlueprint,
+            llm=llm,
+            use_openai_basic=use_openai_basic,
+            api_key=api_key,
+            model=model,
+            temperature=0.2,
+            debug_stage_c=debug_stage_c,
+        )
+
+        # Preserve strict source vs derived separation in blueprint.
+        blueprint.source_metadata = analysis.source_fields
+        blueprint.derived_analysis = analysis.derived_fields
+        artifacts["blueprint"] = blueprint.model_dump()
+
+        instance_prompt = _build_structured_instance_prompt(
+            input_snapshot,
+            analysis,
+            blueprint,
+            creative_mode=creative_mode,
+        )
+        instance = _invoke_structured(
+            prompt_text=instance_prompt,
+            output_schema=StructuredGeneratedInstance,
+            llm=llm,
+            use_openai_basic=use_openai_basic,
+            api_key=api_key,
+            model=model,
+            temperature=temp,
+            debug_stage_c=debug_stage_c,
+        )
+        artifacts["generated_instance"] = instance.model_dump()
+
+        verify_prompt = _build_structured_verification_prompt(input_snapshot, analysis, blueprint, instance)
+        verification = _invoke_structured(
+            prompt_text=verify_prompt,
+            output_schema=GenerationVerificationReport,
+            llm=llm,
+            use_openai_basic=use_openai_basic,
+            api_key=api_key,
+            model=model,
+            temperature=0.0,
+            debug_stage_c=debug_stage_c,
+        )
+        artifacts["verification"] = verification.model_dump()
+
+        new_question_text = (instance.question or "").strip()
+        new_explanation = (instance.explanation or "").strip()
+        if not new_question_text or not new_explanation:
+            raise ValueError("Structured instance missing question/explanation")
+
+        # Verification models can be overly strict; only hard-fail on confident negatives.
+        if verification.is_solvable is False and verification.confidence >= 0.5:
+            raise ValueError("Structured verification failed (unsolvable, high confidence)")
+        if verification.answer_format_valid is False and verification.confidence >= 0.7:
+            raise ValueError("Structured verification failed (answer format invalid, high confidence)")
+
+        if is_multiple_choice:
+            new_choices = [str(c).strip() for c in (instance.choices or [])]
+            effective_letter = instance.correct_answer_letter
+            if verification.corrected_correct_answer_letter:
+                effective_letter = verification.corrected_correct_answer_letter
+            _validate_mc_instance(choices=new_choices, correct_letter=effective_letter)
+
+            unique_ok = verification.multiple_choice_unique_correct
+            if unique_ok is False:
+                raise ValueError("Multiple-choice verification reports non-unique correct option")
+
+            new_question_content = {
+                "paragraph": sample.get("question", {}).get("paragraph"),
+                "question": new_question_text,
+                "choices": new_choices,
+                "correct_answer": [effective_letter],
+                "explanation": new_explanation,
+            }
+        else:
+            effective_answer = instance.correct_answer
+            if verification.corrected_correct_answer:
+                effective_answer = verification.corrected_correct_answer
+            if not effective_answer:
+                raise ValueError("Structured instance missing correct_answer for free response")
+
+            new_question_content = {
+                "paragraph": sample.get("question", {}).get("paragraph"),
+                "question": new_question_text,
+                "choices": None,
+                "correct_answer": str(effective_answer).strip(),
+                "explanation": new_explanation,
+            }
+
+        new_item = {
+            "id": str(uuid.uuid4()),
+            "subject": sample.get("subject", "SAT"),
+            "pool": sample.get("pool", "practice_test"),
+            "section": section,
+            "category": category,
+            "skill": sample.get("skill", ""),
+            "difficulty": difficulty,
+            "type": q_type,
+            "question": new_question_content,
+            "image_url": sample.get("image_url"),
+            "_generation_mode": "structured_openai_v1",
+            "_generation_artifacts": artifacts,
+        }
+        artifacts["status"] = "success"
+        return new_item, artifacts
+    except Exception as e:
+        artifacts["status"] = "fallback"
+        artifacts["reason"] = str(e)
+        return None, artifacts
+
+
 def _build_prompt_multiple_choice_freeform(
     original_question_html: str,
     original_explanation: str,
@@ -1478,12 +2203,15 @@ def generate_new_question(
     sample: Dict[str, Any],
     llm: Optional[ChatOpenAI] = None,
     use_hf: bool = False,
+    use_openai_basic: bool = False,
     hf_api_key: Optional[str] = None,
     hf_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
     hf_base_url: str = "https://router.huggingface.co/v1",
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     creative_mode: Optional[bool] = None,
+    step_b_trace: Optional[Dict[str, Any]] = None,
+    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Sinh câu hỏi mới, explanation và đáp án từ câu mẫu (cùng category, đúng format, chỉ đổi số liệu).
@@ -1492,6 +2220,7 @@ def generate_new_question(
         sample: Một item từ questions_practice_test.json (có id, category, question, explanation, correct_answer, ...).
         llm: LangChain ChatOpenAI. Nếu None sẽ tạo mới từ API keys.
         use_hf: Nếu True, dùng HuggingFace model thay vì OpenAI.
+        use_openai_basic: Nếu True, dùng OpenAI chat-completions trực tiếp với system prompt JSON (không LangChain structured output).
         hf_api_key: HuggingFace API key (hoặc dùng HF_API_KEY env var).
         hf_model: Tên model HuggingFace (mặc định: GLM-Z1-9B via router inference).
         hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
@@ -1522,7 +2251,15 @@ def generate_new_question(
     else:
         mode_text = "creative" if creative_mode else "conservative"
         print(f"📙 Difficulty: {difficulty.upper()} → Strategy: {mode_text.upper()} (manually set)")
-    if llm is None:
+    if use_hf and use_openai_basic:
+        raise ValueError("Không thể bật đồng thời use_hf và use_openai_basic.")
+
+    openai_key = api_key or os.getenv("OPENAI_API_KEY")
+
+    if use_openai_basic and not openai_key:
+        raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
+
+    if llm is None and not use_openai_basic:
         if use_hf:
             # Use HuggingFace model via OpenAI-compatible API
             hf_key = hf_api_key or os.getenv("HF_API_KEY")
@@ -1539,7 +2276,6 @@ def generate_new_question(
             print(f"✓ Using HuggingFace model: {hf_model} ({mode_text} mode)")
         else:
             # Use OpenAI model
-            openai_key = api_key or os.getenv("OPENAI_API_KEY")
             if not openai_key:
                 raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
             
@@ -1550,6 +2286,9 @@ def generate_new_question(
             )
             mode_text = "creative" if creative_mode else "conservative"
             print(f"✓ Using OpenAI model: {model} ({mode_text} mode)")
+    elif use_openai_basic:
+        mode_text = "creative" if creative_mode else "conservative"
+        print(f"✓ Using OpenAI basic inference: {model} ({mode_text} mode)")
 
     category = sample.get("category", "Algebra")
     section = sample.get("section", "Math")
@@ -1570,6 +2309,39 @@ def generate_new_question(
     original_correct_answer = _get_correct_answer_content(sample)    
     is_multiple_choice = (q_type == "multiple-choice") and len(original_choices) == 4 and correct_letter and original_explanation
     generate_full = bool(original_explanation and original_correct_answer)
+
+    # Structured OpenAI pipeline for non-graph math questions.
+    # If structured generation fails, fall back to the legacy branch below.
+    structured_artifacts: Optional[Dict[str, Any]] = None
+    if not use_hf and generate_full:
+        structured_item, structured_artifacts = _try_generate_structured_openai(
+            sample=sample,
+            llm=llm,
+            use_openai_basic=use_openai_basic,
+            api_key=openai_key,
+            model=model,
+            creative_mode=bool(creative_mode),
+            original_html=original_html,
+            original_explanation=original_explanation,
+            original_choices=original_choices,
+            original_correct_answer=original_correct_answer,
+            correct_letter=correct_letter,
+            q_type=q_type,
+            difficulty=difficulty,
+            section=section,
+            category=category,
+            graph_spec=graph_spec,
+            step_b_trace=step_b_trace,
+            debug_stage_c=debug_stage_c,
+        )
+        if structured_item is not None:
+            return structured_item
+
+        reason = (structured_artifacts or {}).get("reason", "unknown")
+        # Fail fast for validator high-confidence failures so UI can surface model-stuck cases.
+        if isinstance(reason, str) and reason.startswith("Structured verification failed"):
+            raise RuntimeError(reason)
+        print(f"⚠ Structured pipeline fallback to legacy generator: {reason}")
 
     if is_multiple_choice:
         if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
@@ -1609,6 +2381,8 @@ def generate_new_question(
             
             # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
                 # Step 1: Get free-form output from reasoning LLM
                 freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
                     question_text_no_svg,
@@ -1635,7 +2409,28 @@ def generate_new_question(
                     api_key=api_key,
                 )
                 print("✓ Successfully formatted into JSON")
+            elif use_openai_basic:
+                freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
+                    question_text_no_svg,
+                    original_explanation,
+                    original_choices,
+                    correct_letter,
+                    graph_spec_dict,
+                    category,
+                    section,
+                    difficulty,
+                )
+                result_graph = _invoke_openai_basic_structured(
+                    prompt_text=freeform_prompt,
+                    output_schema=GeneratedGraphQuestionContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=0.7 if creative_mode else 0.3,
+                    debug_stage_c=debug_stage_c,
+                )
             else:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
                 structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
                 result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
@@ -1754,6 +2549,8 @@ def generate_new_question(
                 creative_mode=creative_mode,
             )            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
                 # Step 1: Get free-form output from reasoning LLM
                 freeform_prompt = _build_prompt_multiple_choice_freeform(
                     original_html,
@@ -1780,7 +2577,28 @@ def generate_new_question(
                     api_key=api_key,
                 )
                 print("✓ Successfully formatted into JSON")
+            elif use_openai_basic:
+                freeform_prompt = _build_prompt_multiple_choice_freeform(
+                    original_html,
+                    original_explanation,
+                    original_choices,
+                    correct_letter,
+                    category,
+                    section,
+                    difficulty,
+                    creative_mode=creative_mode,
+                )
+                result_mc = _invoke_openai_basic_structured(
+                    prompt_text=freeform_prompt,
+                    output_schema=GeneratedMultipleChoiceContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=0.7 if creative_mode else 0.3,
+                    debug_stage_c=debug_stage_c,
+                )
             else:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
                 structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
                 result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
@@ -1841,6 +2659,8 @@ def generate_new_question(
             
             # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
                 # Step 1: Get free-form output from reasoning LLM
                 freeform_prompt = _build_prompt_graph_free_response_freeform(
                     question_text_no_svg,
@@ -1866,7 +2686,27 @@ def generate_new_question(
                     api_key=api_key,
                 )
                 print("✓ Successfully formatted into JSON")
+            elif use_openai_basic:
+                freeform_prompt = _build_prompt_graph_free_response_freeform(
+                    question_text_no_svg,
+                    original_explanation,
+                    original_correct_answer,
+                    graph_spec_dict,
+                    category,
+                    section,
+                    difficulty,
+                )
+                result_free_response = _invoke_openai_basic_structured(
+                    prompt_text=freeform_prompt,
+                    output_schema=GeneratedGraphFreeResponseContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=0.7 if creative_mode else 0.3,
+                    debug_stage_c=debug_stage_c,
+                )
             else:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
                 structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
                 result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
@@ -1948,6 +2788,8 @@ def generate_new_question(
             )
             # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
             if use_hf:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
                 # Step 1: Get free-form output from reasoning LLM
                 freeform_prompt = _build_prompt_freeform(
                     original_html,
@@ -1974,7 +2816,28 @@ def generate_new_question(
                     api_key=api_key,
                 )
                 print("✓ Successfully formatted into JSON")
+            elif use_openai_basic:
+                freeform_prompt = _build_prompt_freeform(
+                    original_html,
+                    original_explanation,
+                    original_correct_answer,
+                    category,
+                    section,
+                    q_type,
+                    difficulty,
+                    creative_mode=creative_mode,
+                )
+                result = _invoke_openai_basic_structured(
+                    prompt_text=freeform_prompt,
+                    output_schema=GeneratedQuestionContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=0.7 if creative_mode else 0.3,
+                    debug_stage_c=debug_stage_c,
+                )
             else:
+                if llm is None:
+                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
                 structured_llm = llm.with_structured_output(GeneratedQuestionContent)
                 result: GeneratedQuestionContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
@@ -2002,6 +2865,8 @@ def generate_new_question(
         
         # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
         if use_hf:
+            if llm is None:
+                raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
             # Step 1: Free-form prompt for reasoning LLM
             freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
 
@@ -2028,7 +2893,28 @@ QUESTION:
                 api_key=api_key,
             )
             print("✓ Successfully formatted into JSON")
+        elif use_openai_basic:
+            freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
+
+Sample question:
+{original_html}
+
+Generate your response in this format:
+
+QUESTION:
+[Question with only numbers changed, preserving all HTML and MathML structure]
+"""
+            res = _invoke_openai_basic_structured(
+                prompt_text=freeform_prompt,
+                output_schema=QuestionOnly,
+                api_key=openai_key or "",
+                model=model,
+                temperature=0.7 if creative_mode else 0.3,
+                debug_stage_c=debug_stage_c,
+            )
         else:
+            if llm is None:
+                raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
             QuestionOnlyModel = llm.with_structured_output(QuestionOnly)
             prompt_question_only = f"""You are an SAT question writer. Change ONLY the numerical values in the sample question below. Do NOT change wording or structure. Output the same HTML + MathML with only numbers substituted.
 
@@ -2064,6 +2950,9 @@ Return only the new question string (same format, numbers changed)."""
         "question": new_question_content,
         "image_url": sample.get("image_url"),
     }
+    if structured_artifacts:
+        new_item["_generation_mode"] = "legacy_with_structured_fallback"
+        new_item["_generation_artifacts"] = structured_artifacts
     return new_item
 
 

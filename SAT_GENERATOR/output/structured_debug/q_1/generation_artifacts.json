@@ -1,0 +1,107 @@
+{
+  "pipeline": "structured_openai_v1",
+  "status": "success",
+  "mode": "openai_basic",
+  "input_snapshot": {
+    "id": "06868720-2332-4e01-b188-4f2342bc60a9",
+    "category": "Algebra",
+    "section": "Math",
+    "skill": "",
+    "type": "multiple-choice",
+    "difficulty": "Easy",
+    "has_graph": false,
+    "question_html": "<p style=\"text-align: left;\">The total cost <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math>, in dollars, to lease a car for <math alttext=\"36\"><mn>36</mn>\n</math> months from a particular car dealership is given by <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,000\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mn>36</mn></mrow><mi>x</mi><mo>+</mo><mrow><mn>1,000</mn></mrow></math>, where <math alttext=\"x\"><mi>x</mi>\n</math> is the monthly payment, in dollars. What is the total cost to lease a car when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mrow><mn>400</mn></mrow></math>?</p>",
+    "explanation_html": "<p>Choice C is correct. It's given that <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> is the total cost, in dollars, to lease a car from this dealership with a monthly payment of <math alttext=\"x\"><mi>x</mi>\n</math> dollars. Therefore, the total cost, in dollars, to lease the car when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mn>400</mn></math> is represented by the value of <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> when <math alttext=\"x equals 400\"><mi>x</mi><mo>=</mo><mn>400</mn></math>. Substituting <math alttext=\"400\"><mn>400</mn>\n</math> for <math alttext=\"x\"><mi>x</mi>\n</math> in the equation <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,000\"><mi>f</mi><mfenced><mi>x</mi></mfenced><mo>=</mo><mn>36</mn><mi>x</mi><mo>+</mo><mn>1,000</mn></math> yields <math alttext=\"f left parenthesis 400 right parenthesis equals 36 left parenthesis 400 right parenthesis plus 1,000\"><mo>&nbsp;</mo><mi>f</mi><mfenced><mn>400</mn></mfenced><mo>=</mo><mn>36</mn><mfenced><mn>400</mn></mfenced><mo>+</mo><mn>1,000</mn></math>, or <math alttext=\"f left parenthesis 400 right parenthesis equals 15,400\"><mi>f</mi><mfenced><mn>400</mn></mfenced><mo>=</mo><mn>15,400</mn></math>. Thus, when the monthly payment is <math alttext=\"dollar sign 400\"><mo>$</mo><mn>400</mn></math>, the total cost to lease a car is&nbsp;<math alttext=\"dollar sign 15,400\"><mo>$</mo><mn>15,400</mn></math>.&nbsp;</p>\n<p>Choice A is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice B is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice D is incorrect and may result from conceptual or calculation errors.</p>",
+    "choices": [
+      "<p><math alttext=\"dollar sign 13,400\"><mo>$</mo><mn>13,400</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 13,000\"><mo>$</mo><mn>13,000</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 15,400\"><mo>$</mo><mn>15,400</mn>\n</math></p>",
+      "<p><math alttext=\"dollar sign 37,400\"><mo>$</mo><mrow><mn>37,400</mn></mrow></math></p>"
+    ],
+    "correct_answer_letter": "C",
+    "correct_answer_content": "<p><math alttext=\"dollar sign 15,400\"><mo>$</mo><mn>15,400</mn>\n</math></p>"
+  },
+  "analysis": {
+    "skill": "",
+    "sub_skill": "",
+    "question_type": "",
+    "difficulty": "",
+    "core_structure": "",
+    "solve_strategy": [],
+    "logic_invariants": [],
+    "changeable_parameters": [],
+    "parameter_constraints": [],
+    "answer_format": "",
+    "rendering_notes": [],
+    "risk_flags": []
+  },
+  "blueprint": {
+    "skill": "Algebra",
+    "difficulty": "Easy",
+    "question_type": "multiple-choice",
+    "problem_family": "Cost Calculation",
+    "solve_strategy": [
+      "Substitute the given value into the function",
+      "Calculate the total cost based on the monthly payment"
+    ],
+    "known_values": {
+      "months": 36,
+      "fixed_cost": 1000
+    },
+    "derived_values": {
+      "total_cost": 15400
+    },
+    "changeable_parameters": [
+      {
+        "name": "monthly_payment",
+        "role": "input",
+        "value_type": "number",
+        "current_value": 400,
+        "suggested_range": "0-1000",
+        "constraints": [
+          "monthly_payment must be a positive number"
+        ]
+      }
+    ],
+    "parameter_constraints": [
+      "monthly_payment must be less than or equal to 1000"
+    ],
+    "answer_format": "dollars",
+    "logic_invariants": [
+      "total_cost = 36 * monthly_payment + 1000"
+    ],
+    "rendering_notes": [
+      "Ensure math expressions are correctly formatted in HTML and MathML"
+    ],
+    "fallback_generation_hint": "Consider varying the monthly payment and recalculating the total cost."
+  },
+  "generated_instance": {
+    "question": "<p style=\"text-align: left;\">The total cost <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math>, in dollars, to lease a car for <math alttext=\"36\"><mn>36</mn></math> months from a different car dealership is given by <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,200\"><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mn>36</mn></mrow><mi>x</mi><mo>+</mo><mrow><mn>1,200</mn></mrow></math>, where <math alttext=\"x\"><mi>x</mi></math> is the monthly payment, in dollars. What is the total cost to lease a car when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mrow><mn>500</mn></mrow></math>?</p>",
+    "explanation": "<p>Choice B is correct. It's given that <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> is the total cost, in dollars, to lease a car from this dealership with a monthly payment of <math alttext=\"x\"><mi>x</mi></math> dollars. Therefore, the total cost, in dollars, to lease the car when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mn>500</mn></math> is represented by the value of <math alttext=\"f left parenthesis x right parenthesis\"><mi>f</mi><mfenced><mi>x</mi></mfenced></math> when <math alttext=\"x equals 500\"><mi>x</mi><mo>=</mo><mn>500</mn></math>. Substituting <math alttext=\"500\"><mn>500</mn></math> for <math alttext=\"x\"><mi>x</mi></math> in the equation <math alttext=\"f left parenthesis x right parenthesis equals 36 x plus 1,200\"><mi>f</mi><mfenced><mi>x</mi></mfenced><mo>=</mo><mn>36</mn><mi>x</mi><mo>+</mo><mn>1,200</mn></math> yields <math alttext=\"f left parenthesis 500 right parenthesis equals 36 left parenthesis 500 right parenthesis plus 1,200\"><mo>&nbsp;</mo><mi>f</mi><mfenced><mn>500</mn></mfenced><mo>=</mo><mn>36</mn><mfenced><mn>500</mn></mfenced><mo>+</mo><mn>1,200</mn></math>, or <math alttext=\"f left parenthesis 500 right parenthesis equals 19,200\"><mi>f</mi><mfenced><mn>500</mn></mfenced><mo>=</mo><mn>19,200</mn></math>. Thus, when the monthly payment is <math alttext=\"dollar sign 500\"><mo>$</mo><mn>500</mn></math>, the total cost to lease a car is&nbsp;<math alttext=\"dollar sign 19,200\"><mo>$</mo><mn>19,200</mn></math>.&nbsp;</p>\n<p>Choice A is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice C is incorrect and may result from conceptual or calculation errors.</p>\n<p>Choice D is incorrect and may result from conceptual or calculation errors.</p>",
+    "choices": [
+      "<p><math alttext=\"dollar sign 18,200\"><mo>$</mo><mn>18,200</mn></math></p>",
+      "<p><math alttext=\"dollar sign 19,200\"><mo>$</mo><mn>19,200</mn></math></p>",
+      "<p><math alttext=\"dollar sign 20,500\"><mo>$</mo><mn>20,500</mn></math></p>",
+      "<p><math alttext=\"dollar sign 21,000\"><mo>$</mo><mn>21,000</mn></math></p>"
+    ],
+    "correct_answer_letter": "B",
+    "correct_answer": "<p><math alttext=\"dollar sign 19,200\"><mo>$</mo><mn>19,200</mn></math></p>",
+    "parameter_values": {},
+    "derivation_summary": ""
+  },
+  "verification": {
+    "is_solvable": true,
+    "answer_format_valid": true,
+    "reasoning_alignment": "The question aligns with the intended solving strategy of substituting the given value into the function and calculating the total cost based on the monthly payment.",
+    "multiple_choice_unique_correct": true,
+    "distractor_quality": "The distractors are plausible but incorrect answers that may result from calculation errors.",
+    "verification_notes": [
+      "The total cost calculation is correct based on the provided function.",
+      "The correct answer is unique and matches the derived value.",
+      "The answer format is valid as it presents the total cost in dollars."
+    ],
+    "corrected_correct_answer_letter": "B",
+    "corrected_correct_answer": "<p><math alttext=\"dollar sign 19,200\"><mo>$</mo><mn>19,200</mn></math></p>",
+    "confidence": 1.0
+  }
+}

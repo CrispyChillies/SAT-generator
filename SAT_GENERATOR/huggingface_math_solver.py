@@ -663,7 +663,8 @@ def solve_with_steps_hf(
     *,
     new_correct_answer: Optional[Any] = None,
     api_key: Optional[str] = None,
-    model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
+    model: str = "qwen2.5-32b-instruct",
+    base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     parser: Optional[MathMLParser] = None,
     verbose: bool = False,
     temperature: float = 0.1,
@@ -694,14 +695,14 @@ def solve_with_steps_hf(
         - is_correct: Whether answer matches expected (if new_correct_answer provided)
         - error: Error string if any
     """
-    api_key = api_key or os.getenv("HF_API_KEY")
+    api_key = api_key or os.getenv("QWEN_API_KEY") or os.getenv("HF_API_KEY")
     if not api_key:
         return {
             "final_result": None,
             "steps_detail": [],
             "answer_text": None,
             "is_correct": None,
-            "error": "HF_API_KEY not set in environment or not provided",
+            "error": "QWEN_API_KEY (or HF_API_KEY) not set in environment or not provided",
         }
     
     parser = parser or MathMLParser()
@@ -721,10 +722,11 @@ def solve_with_steps_hf(
         question_text = question
     
     try:
-        # Initialize solver
+        # Initialize solver with Qwen (or any OpenAI-compatible) endpoint
         solver = HuggingFaceMathSolver(
             api_key=api_key,
             model=model,
+            base_url=base_url,
             verbose=verbose
         )
         

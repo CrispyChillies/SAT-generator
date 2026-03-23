@@ -15,6 +15,13 @@ from tools import math_tools
 from mathml_parser import MathMLParser
 from pydantic import BaseModel, ConfigDict, Field
 
+
+def _build_chat_model(model: str):
+    kwargs: Dict[str, Any] = {"model": model}
+    if "gpt-5" not in (model or "").lower():
+        kwargs["temperature"] = 0
+    return ChatOpenAI(**kwargs)
+
 # ============================================================================
 # TOOL EXECUTION TRACKER
 # ============================================================================
@@ -187,7 +194,7 @@ class LangGraphMathAgent:
         """
         os.environ["OPENAI_API_KEY"] = api_key
         
-        self.llm = ChatOpenAI(model=model, temperature=0)
+        self.llm = _build_chat_model(model)
         self.llm_with_tools = self.llm.bind_tools(math_tools)
         self.parser = MathMLParser()
         self.tools = math_tools

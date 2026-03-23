@@ -21,8 +21,9 @@ import os
 import json
 import argparse
 import traceback
+import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from dotenv import load_dotenv
 
@@ -35,12 +36,22 @@ from agent import LangGraphMathAgent
 from sat_math_solver import solve_with_steps
 from mathml_parser import MathMLParser
 
-# HuggingFace solver (optional alternative to OpenAI)
+# Qwen / HuggingFace-compatible solver (uses OpenAI-compatible API)
+QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
+QWEN_BASE_URL = os.getenv("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+QWEN_MODEL    = os.getenv("QWEN_MODEL",    "qwen2.5-32b-instruct")
+
 try:
     from huggingface_math_solver import HuggingFaceMathSolver, solve_with_steps_hf
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
+
+try:
+    from openai_basic_math_solver import OpenAIBasicMathSolver, solve_with_steps_openai_basic
+    OA_BASIC_AVAILABLE = True
+except ImportError:
+    OA_BASIC_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Import modules for R&W flow
@@ -53,6 +64,108 @@ from rw_question_solver import solve_rw_question_simple
 # ---------------------------------------------------------------------------
 
 CHOICE_LETTERS = ("A", "B", "C", "D")
+
+
+def _extract_mc_letter(correct_answer: Any) -> Optional[str]:
+    letter = correct_answer[0] if isinstance(correct_answer, (list, tuple)) and correct_answer else correct_answer
+    if not isinstance(letter, str):
+        return None
+    letter = letter.strip().upper()
+    return letter if letter in CHOICE_LETTERS else None
+
+
+def _expected_answer_for_solver(correct_answer: Any, choices: List[str]) -> Any:
+    """Use choice content (not A/B/C/D letter) as expected answer for solver verification."""
+    letter = _extract_mc_letter(correct_answer)
+    if not letter:
+        return correct_answer
+    idx = CHOICE_LETTERS.index(letter)
+    if 0 <= idx < len(choices):
+        return (choices[idx] or "").strip() or correct_answer
+    return correct_answer
+
+
+def _extract_numeric_value(text: str) -> Optional[float]:
+    """Extract one numeric value from text/HTML for robust answer-choice matching."""
+    if not text:
+        return None
+    s = str(text)
+
+    frac = re.search(r"([+-]?\d+)\s*/\s*([+-]?\d+)", s)
+    if frac:
+        d = int(frac.group(2))
+        if d != 0:
+            return float(int(frac.group(1)) / d)
+
+    nums = re.findall(r"[+-]?\d[\d,]*(?:\.\d+)?", s)
+    if not nums:
+        return None
+    token = nums[-1].replace(",", "")
+    try:
+        return float(token)
+    except ValueError:
+        return None
+
+
+def _map_solver_result_to_choice_letter(
+    solver_final_result: Any,
+    choices: List[str],
+    parser: MathMLParser,
+) -> Optional[str]:
+    """Map solver final result to choice letter by numeric/text equivalence."""
+    if solver_final_result is None or not choices:
+        return None
+
+    solver_s = str(solver_final_result).strip()
+    solver_num = _extract_numeric_value(solver_s)
+
+    for i, choice_html in enumerate(choices[:4]):
+        parsed = parser.parse(choice_html or "") if isinstance(choice_html, str) else {"text": str(choice_html)}
+        choice_text = (parsed.get("text") or "").strip()
+
+        if solver_s and choice_text and solver_s in choice_text:
+            return CHOICE_LETTERS[i]
+
+        choice_num = _extract_numeric_value(choice_text)
+        if solver_num is not None and choice_num is not None and abs(solver_num - choice_num) < 1e-9:
+            return CHOICE_LETTERS[i]
+
+    return None
+
+
+def _rewrite_explanation_after_answer_correction(
+    explanation_html: str,
+    *,
+    old_letter: str,
+    new_letter: str,
+    old_choice_html: str,
+    new_choice_html: str,
+    parser: MathMLParser,
+) -> str:
+    """Best-effort explanation update after letter/value correction."""
+    if not explanation_html:
+        return explanation_html
+
+    updated = explanation_html
+    updated = re.sub(rf"\\bChoice\\s+{re.escape(old_letter)}\\s+is\\s+correct\\b", f"Choice {new_letter} is correct", updated, flags=re.IGNORECASE)
+    updated = re.sub(rf"\\bChoice\\s+{re.escape(old_letter)}\\b", f"Choice {new_letter}", updated, flags=re.IGNORECASE)
+
+    old_text = (parser.parse(old_choice_html or "").get("text") or "").strip()
+    new_text = (parser.parse(new_choice_html or "").get("text") or "").strip()
+    old_num = _extract_numeric_value(old_text)
+    new_num = _extract_numeric_value(new_text)
+
+    if old_num is not None and new_num is not None:
+        old_int = str(int(old_num)) if float(old_num).is_integer() else str(old_num)
+        new_int = str(int(new_num)) if float(new_num).is_integer() else str(new_num)
+
+        old_comma = f"{int(old_num):,}" if float(old_num).is_integer() else old_int
+        new_comma = f"{int(new_num):,}" if float(new_num).is_integer() else new_int
+
+        updated = re.sub(rf"(?<!\\d){re.escape(old_int)}(?!\\d)", new_int, updated)
+        updated = updated.replace(old_comma, new_comma)
+
+    return updated
 
 
 def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
@@ -90,6 +203,63 @@ def preprocess_correct_answer(sample: Dict[str, Any]) -> Any:
     return (choices[idx] or "").strip() or raw
 
 
+def _save_json(path: Path, data: Any) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _save_math_generation_artifacts(
+    *,
+    out_dir: Path,
+    generation_artifacts: Optional[Dict[str, Any]],
+    verbose: bool,
+) -> Dict[str, str]:
+    """Persist structured generation artifacts and return saved file paths."""
+    if not generation_artifacts:
+        return {}
+
+    saved: Dict[str, str] = {}
+    # Canonical filenames requested by the structured pipeline design.
+    mapping = {
+        "analysis": "original_analysis.json",
+        "blueprint": "problem_blueprint.json",
+        "generated_instance": "generated_instance.json",
+        "verification": "verification_result.json",
+    }
+
+    for key, filename in mapping.items():
+        payload = generation_artifacts.get(key)
+        if payload is None:
+            continue
+        path = out_dir / filename
+        _save_json(path, payload)
+        saved[key] = str(path)
+
+    # Backward-compatible aliases for existing tooling.
+    alias_mapping = {
+        "analysis": "original_problem_analysis.json",
+        "verification": "generation_verification.json",
+    }
+    for key, alias_name in alias_mapping.items():
+        payload = generation_artifacts.get(key)
+        if payload is None:
+            continue
+        alias_path = out_dir / alias_name
+        _save_json(alias_path, payload)
+        saved[f"{key}_alias"] = str(alias_path)
+
+    full_path = out_dir / "generation_artifacts.json"
+    _save_json(full_path, generation_artifacts)
+    saved["all"] = str(full_path)
+
+    if verbose and saved:
+        print("Saved structured generation artifacts:")
+        for key, path in saved.items():
+            print(f"  - {key}: {path}")
+
+    return saved
+
+
 # ---------------------------------------------------------------------------
 # Question type detection
 # ---------------------------------------------------------------------------
@@ -122,11 +292,14 @@ def run_math_flow(
     verbose: bool = True,
     use_hf_solver: bool = False,
     use_hf_generator: bool = False,
+    use_openai_basic_solver: bool = False,
+    use_openai_basic_generator: bool = False,
     hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
-    hf_base_url: str = "https://router.huggingface.co/v1",
+    hf_generator_model: str = QWEN_MODEL,
+    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
+    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Chạy luồng đầy đủ theo flow.md.
@@ -145,6 +318,8 @@ def run_math_flow(
         verbose: In log chi tiết.
         use_hf_solver: Nếu True, dùng HuggingFace solver thay vì OpenAI.
         use_hf_generator: Nếu True, dùng HuggingFace model cho việc generate câu hỏi mới.
+        use_openai_basic_solver: Nếu True, dùng OpenAI basic solver (direct inference, không tool-calling agent).
+        use_openai_basic_generator: Nếu True, dùng OpenAI basic generator (direct JSON inference, không LangChain structured output).
         hf_api_key: HuggingFace API key (nếu dùng HF solver). None = lấy từ HF_API_KEY.
         hf_generator_model: Tên model HuggingFace cho việc generate câu hỏi (mặc định: GLM-Z1-9B via router).
         hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
@@ -155,8 +330,28 @@ def run_math_flow(
           - new_question_item: Câu hỏi mới (dict), gồm question, explanation, correct_answer.
           - new_question_text: Nội dung câu hỏi mới (HTML/string).
           - answer_result: Kết quả từ sat_math_solver (final_result, steps_detail, error, ...).
+            - generation_artifacts: Structured artifacts from analysis/blueprint/instance/verification (if available).
+            - generation_artifact_paths: Saved artifact JSON paths.
           - error: Lỗi tổng (nếu có).
     """
+    if use_hf_solver and use_openai_basic_solver:
+        return {
+            "error": "Không thể bật đồng thời use_hf_solver và use_openai_basic_solver.",
+            "steps_json_path": None,
+            "new_question_item": None,
+            "new_question_text": None,
+            "answer_result": None,
+        }
+
+    if use_hf_generator and use_openai_basic_generator:
+        return {
+            "error": "Không thể bật đồng thời use_hf_generator và use_openai_basic_generator.",
+            "steps_json_path": None,
+            "new_question_item": None,
+            "new_question_text": None,
+            "answer_result": None,
+        }
+
     # Check API keys based on solver choice
     if use_hf_solver:
         if not HF_AVAILABLE:
@@ -167,10 +362,28 @@ def run_math_flow(
                 "new_question_text": None,
                 "answer_result": None,
             }
-        hf_api_key = hf_api_key or os.getenv("HF_API_KEY")
+        hf_api_key = hf_api_key or os.getenv("QWEN_API_KEY") or os.getenv("HF_API_KEY")
         if not hf_api_key:
             return {
-                "error": "Cần đặt HF_API_KEY trong môi trường hoặc truyền hf_api_key.",
+                "error": "Cần đặt QWEN_API_KEY (hoặc HF_API_KEY) trong môi trường hoặc truyền hf_api_key.",
+                "steps_json_path": None,
+                "new_question_item": None,
+                "new_question_text": None,
+                "answer_result": None,
+            }
+    elif use_openai_basic_solver:
+        if not OA_BASIC_AVAILABLE:
+            return {
+                "error": "OpenAI basic solver not available. Check openai_basic_math_solver.py import.",
+                "steps_json_path": None,
+                "new_question_item": None,
+                "new_question_text": None,
+                "answer_result": None,
+            }
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {
+                "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
                 "steps_json_path": None,
                 "new_question_item": None,
                 "new_question_text": None,
@@ -228,23 +441,47 @@ def run_math_flow(
         "new_question_item": None,
         "new_question_text": None,
         "answer_result": None,
+        "step_b_trace": None,
+        "generation_artifacts": None,
+        "generation_artifact_paths": {},
+        "solver_verification": None,
         "error": None,
     }
 
     # --- B: Agent sinh steps_function_and_meaning.json ---
     if verbose:
         print("\n" + "=" * 70)
-        solver_name = "HuggingFace Solver" if use_hf_solver else "LangGraph Agent"
+        if use_hf_solver:
+            solver_name = "HuggingFace Solver"
+        elif use_openai_basic_solver:
+            solver_name = "OpenAI Basic Solver"
+        else:
+            solver_name = "LangGraph Agent"
         print(f"B: {solver_name} sinh steps_function_and_meaning.json")
         print("=" * 70)
     try:
         if use_hf_solver:
-            # Use HuggingFace solver
+            # Use Qwen solver (via HuggingFaceMathSolver with Qwen endpoint)
             agent = HuggingFaceMathSolver(
                 api_key=hf_api_key,
-                openai_api_key=open_ai_api_key, 
-                model="zai-org/GLM-Z1-9B-0414:featherless-ai",
+                openai_api_key=open_ai_api_key,
+                model=QWEN_MODEL,
+                base_url=QWEN_BASE_URL,
                 verbose=verbose
+            )
+            trace = agent.solve(
+                question=question_html,
+                mathml_explanation=explanation,
+                correct_answer=correct_answer,
+                steps_json_path=str(steps_path),
+            )
+        elif use_openai_basic_solver:
+            # Use OpenAI direct inference solver (no tool-calling orchestration)
+            agent = OpenAIBasicMathSolver(
+                api_key=api_key,
+                verification_api_key=open_ai_api_key,
+                model=model,
+                verbose=verbose,
             )
             trace = agent.solve(
                 question=question_html,
@@ -267,6 +504,42 @@ def run_math_flow(
             if verbose:
                 print("Agent error:", trace.error)
             return result_bag
+
+        # Surface full Step-B solver trace for UI/debug.
+        if hasattr(trace, "to_dict"):
+            try:
+                result_bag["step_b_trace"] = trace.to_dict()
+            except Exception:
+                result_bag["step_b_trace"] = None
+        else:
+            # Fallback serialization for custom trace objects.
+            try:
+                result_bag["step_b_trace"] = {
+                    "final_result": getattr(trace, "final_result", None),
+                    "is_correct": getattr(trace, "is_correct", None),
+                    "error": getattr(trace, "error", None),
+                    "steps": [
+                        {
+                            "step_number": getattr(s, "step_number", i + 1),
+                            "thought": getattr(s, "thought", ""),
+                            "tool_name": getattr(s, "tool_name", ""),
+                            "tool_output": getattr(s, "tool_output", None),
+                        }
+                        for i, s in enumerate(getattr(trace, "steps", []) or [])
+                    ],
+                }
+            except Exception:
+                result_bag["step_b_trace"] = None
+
+        if verbose and result_bag.get("step_b_trace"):
+            tb = result_bag["step_b_trace"]
+            steps = tb.get("steps") or []
+            print("\nStep B trace summary:")
+            print(f"  steps={len(steps)} final={tb.get('final_result')} is_correct={tb.get('is_correct')}")
+            if steps:
+                thought_preview = (steps[0].get("thought") or "").strip().replace("\n", " ")
+                if thought_preview:
+                    print("  thought:", thought_preview[:220] + ("..." if len(thought_preview) > 220 else ""))
     except Exception as e:
         result_bag["error"] = f"Agent: {e}"
         if verbose:
@@ -277,26 +550,43 @@ def run_math_flow(
     # --- C: Gen câu hỏi mới + explanation + đáp án ---
     if verbose:
         print("\n" + "=" * 70)
-        generator_name = "HuggingFace Generator" if use_hf_generator else "OpenAI Generator"
+        if use_hf_generator:
+            generator_name = "HuggingFace Generator"
+        elif use_openai_basic_generator:
+            generator_name = "OpenAI Basic Generator"
+        else:
+            generator_name = "OpenAI Generator"
         print(f"C: {generator_name} sinh câu hỏi mới, explanation và đáp án")
         print("=" * 70)
     try:
         new_question_item = generate_new_question(
             sample,
             use_hf=use_hf_generator,
+            use_openai_basic=use_openai_basic_generator,
             hf_api_key=hf_api_key,
             hf_model=hf_generator_model,
             hf_base_url=hf_base_url,
             api_key=api_key,
             model=model,
             creative_mode=creative_mode,
+            step_b_trace=result_bag.get("step_b_trace"),
+            debug_stage_c=debug_stage_c,
         )
         result_bag["new_question_item"] = new_question_item
+        generation_artifacts = new_question_item.get("_generation_artifacts") if isinstance(new_question_item, dict) else None
+        result_bag["generation_artifacts"] = generation_artifacts
+        out_dir_path = out_dir if isinstance(out_dir, Path) else Path(out_dir or ".")
+        result_bag["generation_artifact_paths"] = _save_math_generation_artifacts(
+            out_dir=out_dir_path,
+            generation_artifacts=generation_artifacts,
+            verbose=verbose,
+        )
         new_q_block = new_question_item.get("question") or {}
         new_question_text = (new_q_block.get("question") or "").strip()
         new_explanation = (new_q_block.get("explanation") or "").strip()
         new_correct_answer = new_q_block.get("correct_answer")
         new_choices = new_q_block.get("choices") or []
+        expected_answer_for_solver = _expected_answer_for_solver(new_correct_answer, new_choices)
         result_bag["new_question_text"] = new_question_text
         if verbose and new_question_text:
             print("Câu hỏi mới (đoạn đầu):", new_question_text[:200] + "..." if len(new_question_text) > 200 else new_question_text)
@@ -330,18 +620,35 @@ def run_math_flow(
     # --- D: Sinh đáp án cho câu hỏi mới (dựa vào steps JSON) ---
     if verbose:
         print("\n" + "=" * 70)
-        solver_name = "HuggingFace Solver" if use_hf_solver else "sat_math_solver"
+        if use_hf_solver:
+            solver_name = "HuggingFace Solver"
+        elif use_openai_basic_solver:
+            solver_name = "OpenAI Basic Solver"
+        else:
+            solver_name = "sat_math_solver"
         print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
         print("=" * 70)
     try:
         if use_hf_solver:
-            # Use HuggingFace solver (one-shot reasoning, doesn't use steps JSON)
+            # Use Qwen solver (one-shot reasoning via HuggingFace-compatible interface)
             answer_result = solve_with_steps_hf(
                 question=new_question_text,
                 steps_path=str(steps_path),
-                new_correct_answer=new_correct_answer,
+                new_correct_answer=expected_answer_for_solver,
                 api_key=hf_api_key,
-                model="zai-org/GLM-Z1-9B-0414:featherless-ai",
+                model=QWEN_MODEL,
+                base_url=QWEN_BASE_URL,
+                parser=parser,
+                verbose=verbose,
+            )
+        elif use_openai_basic_solver:
+            # Use OpenAI direct inference solver
+            answer_result = solve_with_steps_openai_basic(
+                question=new_question_text,
+                steps_path=str(steps_path),
+                new_correct_answer=expected_answer_for_solver,
+                api_key=api_key,
+                model=model,
                 parser=parser,
                 verbose=verbose,
             )
@@ -357,6 +664,55 @@ def run_math_flow(
             )
         
         result_bag["answer_result"] = answer_result
+
+        # Reconcile multiple-choice answer when solver result maps to a different choice.
+        current_letter = _extract_mc_letter(new_correct_answer)
+        solver_mapped_letter = _map_solver_result_to_choice_letter(
+            answer_result.get("final_result"),
+            new_choices,
+            parser,
+        )
+        if current_letter and solver_mapped_letter and solver_mapped_letter != current_letter:
+            old_idx = CHOICE_LETTERS.index(current_letter)
+            new_idx = CHOICE_LETTERS.index(solver_mapped_letter)
+            old_choice_html = new_choices[old_idx] if old_idx < len(new_choices) else ""
+            new_choice_html = new_choices[new_idx] if new_idx < len(new_choices) else ""
+
+            new_q_block["correct_answer"] = [solver_mapped_letter]
+            new_q_block["explanation"] = _rewrite_explanation_after_answer_correction(
+                new_q_block.get("explanation") or "",
+                old_letter=current_letter,
+                new_letter=solver_mapped_letter,
+                old_choice_html=old_choice_html,
+                new_choice_html=new_choice_html,
+                parser=parser,
+            )
+            result_bag["new_question_item"]["question"] = new_q_block
+
+            if verbose:
+                print(
+                    f"Reconciled correct_answer from {current_letter} to {solver_mapped_letter} "
+                    f"based on solver final_result={answer_result.get('final_result')}"
+                )
+
+        solver_verification = {
+            "is_solvable": not bool(answer_result.get("error")),
+            "solver_final_result": answer_result.get("final_result"),
+            "solver_is_correct_vs_generated_answer": answer_result.get("is_correct"),
+            "solver_error": answer_result.get("error"),
+            "answer_format": "multiple_choice" if isinstance(new_correct_answer, list) else "free_response",
+            "reasoning_alignment_hint": "Check generation_verification.json and Step-B trace for strategy alignment.",
+            "solver_mapped_correct_letter": solver_mapped_letter,
+            "generated_correct_letter_before_reconcile": current_letter,
+            "reconciled": bool(current_letter and solver_mapped_letter and solver_mapped_letter != current_letter),
+        }
+        result_bag["solver_verification"] = solver_verification
+        try:
+            out_dir_path = out_dir if isinstance(out_dir, Path) else Path(out_dir or ".")
+            _save_json(out_dir_path / "solver_verification.json", solver_verification)
+        except Exception:
+            pass
+
         if answer_result.get("error"):
             result_bag["error"] = result_bag["error"] or ""
             if result_bag["error"]:
@@ -521,7 +877,10 @@ def run_rw_flow(
     
     try:
         from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model=model, temperature=0.7, api_key=api_key)
+        llm_kwargs = {"model": model, "api_key": api_key}
+        if "gpt-5" not in (model or "").lower():
+            llm_kwargs["temperature"] = 0.7
+        llm = ChatOpenAI(**llm_kwargs)
         new_question = generate_new_rw_question(
             sample, 
             llm=llm, 
@@ -634,11 +993,14 @@ def run_flow(
     verbose: bool = True,
     use_hf_solver: bool = False,
     use_hf_generator: bool = False,
+    use_openai_basic_solver: bool = False,
+    use_openai_basic_generator: bool = False,
     hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
-    hf_base_url: str = "https://router.huggingface.co/v1",
+    hf_generator_model: str = QWEN_MODEL,
+    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
+    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Unified flow that automatically routes to Math or R&W generation based on question type.
@@ -652,6 +1014,8 @@ def run_flow(
         verbose: Print detailed logs
         use_hf_solver: Use HuggingFace solver instead of OpenAI (Math only)
         use_hf_generator: Use HuggingFace model for question generation
+        use_openai_basic_solver: Use OpenAI direct inference solver instead of LangGraph (Math only)
+        use_openai_basic_generator: Use OpenAI direct JSON inference generator instead of LangChain structured output
         hf_api_key: HuggingFace API key (if using HF solver or generator)
         hf_generator_model: HuggingFace model for question generation (default: GLM-Z1-9B via router)
         hf_base_url: Base URL for HuggingFace API (default: router inference)
@@ -688,11 +1052,14 @@ def run_flow(
             verbose=verbose,
             use_hf_solver=use_hf_solver,
             use_hf_generator=use_hf_generator,
+            use_openai_basic_solver=use_openai_basic_solver,
+            use_openai_basic_generator=use_openai_basic_generator,
             hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
             hf_generator_model=hf_generator_model,            
             hf_base_url=hf_base_url,            
             creative_mode=creative_mode,
+            debug_stage_c=debug_stage_c,
         )
 
 
@@ -711,11 +1078,14 @@ def run_flow_batch(
     verbose: bool = True,
     use_hf_solver: bool = False,
     use_hf_generator: bool = False,
+    use_openai_basic_solver: bool = False,
+    use_openai_basic_generator: bool = False,
     hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
-    hf_base_url: str = "https://router.huggingface.co/v1",
+    hf_generator_model: str = QWEN_MODEL,
+    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
+    debug_stage_c: bool = False,
 ):
     """
     Generator that runs run_flow `count` times on the same sample.
@@ -744,11 +1114,14 @@ def run_flow_batch(
             verbose=verbose,
             use_hf_solver=use_hf_solver,
             use_hf_generator=use_hf_generator,
+            use_openai_basic_solver=use_openai_basic_solver,
+            use_openai_basic_generator=use_openai_basic_generator,
             hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
             hf_generator_model=hf_generator_model,
             hf_base_url=hf_base_url,
             creative_mode=creative_mode,
+            debug_stage_c=debug_stage_c,
         )
         yield {"index": i, "total": count, "result": result}
 
@@ -767,10 +1140,14 @@ def main():
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
     ap.add_argument("--use-hf", action="store_true", help="Dùng HuggingFace solver thay vì OpenAI (chỉ cho Math questions)")
     ap.add_argument("--use-hf-generator", action="store_true", help="Dùng HuggingFace model cho việc generate câu hỏi mới (cả Math và R&W)")
+    ap.add_argument("--use-openai-basic", action="store_true", help="Bật OpenAI basic mode cho cả solver và generator (direct inference)")
+    ap.add_argument("--use-openai-basic-solver", action="store_true", help="Dùng OpenAI basic solver (direct inference, không LangGraph/tools)")
+    ap.add_argument("--use-openai-basic-generator", action="store_true", help="Dùng OpenAI basic generator (direct JSON inference)")
     ap.add_argument("--hf-generator-model", type=str, default="zai-org/GLM-Z1-9B-0414:featherless-ai", help="Tên model HuggingFace cho việc generate câu hỏi")
     ap.add_argument("--hf-api-key", type=str, default=None, help="HuggingFace API key (hoặc dùng biến môi trường HF_API_KEY)")
     ap.add_argument("--open-ai-api-key", type=str, default=None, help="OpenAI API key (hoặc dùng biến môi trường OPENAI_API_KEY)")
     ap.add_argument("--conservative-mode", action="store_true", help="Chỉ thay đổi số liệu, giữ nguyên context (mặc định: tạo scenario mới với cùng skill)")
+    ap.add_argument("--debug-stage-c", action="store_true", help="In raw response text cho Stage C (generator) ra terminal")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
     ap.add_argument("--count", type=int, default=1, help="Số câu hỏi mới cần tạo trong một lần chạy (mặc định: 1)")
@@ -786,6 +1163,16 @@ def main():
     out_dir = args.out_dir if args.out_dir else "output"
     count = max(1, args.count)
 
+    use_openai_basic_solver = args.use_openai_basic or args.use_openai_basic_solver
+    use_openai_basic_generator = args.use_openai_basic or args.use_openai_basic_generator
+
+    if args.use_hf and use_openai_basic_solver:
+        print("Error: Không thể bật đồng thời --use-hf và --use-openai-basic-solver")
+        return 1
+    if args.use_hf_generator and use_openai_basic_generator:
+        print("Error: Không thể bật đồng thời --use-hf-generator và --use-openai-basic-generator")
+        return 1
+
     batch_kwargs = dict(
         steps_json_path=args.steps_json,
         out_dir=out_dir,
@@ -793,10 +1180,13 @@ def main():
         verbose=not args.quiet,
         use_hf_solver=args.use_hf,
         use_hf_generator=args.use_hf_generator,
+        use_openai_basic_solver=use_openai_basic_solver,
+        use_openai_basic_generator=use_openai_basic_generator,
         hf_api_key=args.hf_api_key,
         open_ai_api_key=args.open_ai_api_key,
         hf_generator_model=args.hf_generator_model,
         creative_mode=not args.conservative_mode,
+        debug_stage_c=args.debug_stage_c,
     )
 
     results = []
