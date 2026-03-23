@@ -1,8 +1,6 @@
 """
 OpenAI Basic Math Solver - Direct chat-completions inference with GPT models
-for SAT math solving, without LangGraph/tool-calling orchestration.
-
-Compatible with existing agent.py and sat_math_solver.py interfaces.
+for SAT math solving without tool-calling orchestration.
 """
 
 import json
@@ -14,6 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from mathml_parser import MathMLParser
 
@@ -25,70 +24,66 @@ def _supports_custom_temperature(model_name: str) -> bool:
     return "gpt-5" not in (model_name or "").lower()
 
 
-try:
-    from agent import ExecutionTrace, ToolExecutionStep
-except ImportError:
-    from pydantic import BaseModel, Field
+class ToolExecutionStep(BaseModel):
+    step_number: int
+    thought: str
+    tool_name: str = ""
+    tool_input: Dict[str, Any] = {}
+    tool_output: Any = None
+    param_explanation: str = ""
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-    class ToolExecutionStep(BaseModel):
-        step_number: int
-        thought: str
-        tool_name: str = ""
-        tool_input: Dict[str, Any] = {}
-        tool_output: Any = None
-        param_explanation: str = ""
-        timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-    class ExecutionTrace(BaseModel):
-        problem_description: str
-        expected_answer: Any
-        steps: List[ToolExecutionStep] = []
-        final_result: Optional[Any] = None
-        is_correct: Optional[bool] = None
-        error: Optional[str] = None
-        total_steps: int = 0
+class ExecutionTrace(BaseModel):
+    problem_description: str
+    expected_answer: Any
+    steps: List[ToolExecutionStep] = []
+    final_result: Optional[Any] = None
+    is_correct: Optional[bool] = None
+    error: Optional[str] = None
+    total_steps: int = 0
 
-        def add_step(
-            self,
-            thought: str,
-            tool_name: str = "",
-            tool_input: Optional[Dict[str, Any]] = None,
-            tool_output: Any = None,
-            param_explanation: str = "",
-        ):
-            step = ToolExecutionStep(
-                step_number=len(self.steps) + 1,
-                thought=thought,
-                tool_name=tool_name,
-                tool_input=tool_input or {},
-                tool_output=tool_output,
-                param_explanation=param_explanation,
+    def add_step(
+        self,
+        thought: str,
+        tool_name: str = "",
+        tool_input: Optional[Dict[str, Any]] = None,
+        tool_output: Any = None,
+        param_explanation: str = "",
+    ):
+        step = ToolExecutionStep(
+            step_number=len(self.steps) + 1,
+            thought=thought,
+            tool_name=tool_name,
+            tool_input=tool_input or {},
+            tool_output=tool_output,
+            param_explanation=param_explanation,
+        )
+        self.steps.append(step)
+        self.total_steps = len(self.steps)
+
+    def export_steps_json(self, filepath: str) -> None:
+        steps_data = []
+        for s in self.steps:
+            params_meaning = []
+            if s.param_explanation:
+                try:
+                    parsed = json.loads(s.param_explanation)
+                    if isinstance(parsed, list):
+                        params_meaning = parsed
+                except json.JSONDecodeError:
+                    pass
+
+            steps_data.append(
+                {
+                    "step_number": s.step_number,
+                    "function_name": s.tool_name or "reasoning",
+                    "params_meaning": params_meaning,
+                }
             )
-            self.steps.append(step)
-            self.total_steps = len(self.steps)
 
-        def export_steps_json(self, filepath: str) -> None:
-            steps_data = []
-            for s in self.steps:
-                params_meaning = []
-                if s.param_explanation:
-                    try:
-                        parsed = json.loads(s.param_explanation)
-                        if isinstance(parsed, list):
-                            params_meaning = parsed
-                    except json.JSONDecodeError:
-                        pass
-
-                steps_data.append(
-                    {
-                        "step_number": s.step_number,
-                        "function_name": s.tool_name or "reasoning",
-                        "params_meaning": params_meaning,
-                    }
-                )
-
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump({"steps": steps_data}, f, indent=2, ensure_ascii=False)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump({"steps": steps_data}, f, indent=2, ensure_ascii=False)
 
 
 class OpenAIBasicMathSolver:

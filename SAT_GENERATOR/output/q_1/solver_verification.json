@@ -1,11 +1,11 @@
 {
   "is_solvable": true,
-  "solver_final_result": "2005",
-  "solver_is_correct_vs_generated_answer": true,
+  "solver_final_result": "173/1680",
+  "solver_is_correct_vs_generated_answer": false,
   "solver_error": null,
   "answer_format": "multiple_choice",
   "reasoning_alignment_hint": "Check generation_verification.json and Step-B trace for strategy alignment.",
-  "solver_mapped_correct_letter": "C",
-  "generated_correct_letter_before_reconcile": "C",
+  "solver_mapped_correct_letter": null,
+  "generated_correct_letter_before_reconcile": "A",
   "reconciled": false
 }

@@ -5,180 +5,170 @@
     "difficulty": "Hard",
     "type": "multiple-choice",
     "skill": "",
-    "question_text": "How many distinct values can be obtained from <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn></math> by inserting parentheses (no rearranging of factors)?",
+    "question_text": "Let <math><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo></math> be a polynomial of degree <math><mn>5</mn></math> such that <math><mi>p</mi><mo>(</mo><mi>n</mi><mo>)</mo><mo>=</mo><mfrac><mi>n</mi><mrow><msup><mi>n</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac></math> for <math><mi>n</mi><mo>=</mo><mn>2</mn></math>, <math><mn>3</mn></math>, <math><mn>4</mn></math>, <math><mn>5</mn></math>, <math><mn>6</mn></math>, <math><mn>7</mn></math>. Find <math><mi>p</mi><mo>(</mo><mn>8</mn><mo>)</mo></math>.",
     "choices": [
-      "<math><mn>3</mn></math>",
-      "<math><mn>4</mn></math>",
-      "<math><mn>5</mn></math>",
-      "<math><mn>6</mn></math>"
+      "<math><mfrac><mn>1</mn><mn>7</mn></mfrac></math>",
+      "<math><mfrac><mn>5</mn><mn>72</mn></mfrac></math>",
+      "<math><mfrac><mn>3</mn><mn>56</mn></mfrac></math>",
+      "<math><mfrac><mn>37</mn><mn>448</mn></mfrac></math>"
     ],
     "correct_answer": [
-      "B"
+      "C"
     ],
-    "explanation": "Only the placement of the <math><mo>+</mo><mn>1</mn></math> changes the value. The four possibilities are <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mo>(</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>144</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>126</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>122</mn></math>, and <math><mo>(</mo><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>)</mo><mo>+</mo><mn>1</mn><mo>=</mo><mn>121</mn></math>."
+    "explanation": "Define <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>(</mo><msup><mi>x</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn><mo>)</mo><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>−</mo><mi>x</mi></mrow></math>. Then <math><mi>q</mi></math> has degree <math><mn>7</mn></math> and zeros at <math><mi>n</mi><mo>=</mo><mn>2</mn></math> to <math><mn>7</mn></math>, so <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mo>−</mo><mrow><mo>(</mo><mn>29</mn><mi>x</mi><mo>+</mo><mn>27</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>2</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>3</mn><mo>)</mo><mo>⋯</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>7</mn><mo>)</mo></mrow></mfrac><mn>40320</mn></math> using the conditions <math><mi>q</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>=</mo><mo>−</mo><mn>1</mn></math> and <math><mi>q</mi><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>1</mn></math>. Evaluating gives <math><mi>q</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>=</mo><mo>−</mo><mfrac><mn>37</mn><mn>8</mn></mfrac></math>, so <math><mi>p</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>=</mo><mfrac><mrow><mi>q</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>+</mo><mn>8</mn></mrow><mrow><msup><mn>8</mn><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>56</mn></mfrac></math>."
   },
   "derived_analysis": {
-    "skill": "Order of operations / Parenthesization effects",
-    "sub_skill": "Counting distinct evaluation results under different parenthesizations; associativity awareness",
-    "problem_family": "Parentheses placement and evaluation-order effects on mixed operations (multiplication and addition); counting distinct numeric outcomes from different binary tree parenthesizations",
+    "skill": "Polynomial construction and evaluation",
+    "sub_skill": "Using auxiliary polynomials and root-factorization to determine coefficients",
+    "problem_family": "Find the value of a polynomial at a new point given its values at several integers by constructing an auxiliary polynomial with prescribed roots",
     "solve_strategy": [
-      "Enumerate all structurally different full parenthesizations (binary trees) consistent with the given operand order that can change where the +1 is applied.",
-      "Identify which parenthesizations actually change the numerical effect of the +1 (i.e., whether +1 is inside some product factor or applied after all multiplications).",
-      "Evaluate each distinct relevant parenthesization numerically and collect distinct results.",
-      "Count distinct outcomes and map to appropriate answer choice."
+      "Introduce q(x) = (x^2 - 1) p(x) - x so that q(n)=0 for the given integer inputs n because (n^2-1)p(n)-n = 0.",
+      "Recognize deg q = deg p + 2, so q is degree 7 and thus equals (ax + b) * P(x), where P(x) = ∏_{k=2}^7 (x - k).",
+      "Use evaluations at x=1 and x=-1 to produce two linear equations for a and b (these points annihilate the (x^2-1) factor so q(±1) give small integers).",
+      "Solve the 2×2 linear system for a and b, compute P(8) and evaluate q(8) = (a*8 + b)*P(8).",
+      "Recover p(8) from p(8) = (q(8) + 8)/(8^2 - 1) and reduce the resulting fraction."
     ],
-    "reasoning_pattern": "Case analysis over possible parenthesizations combined with application of associativity of multiplication and non-distributivity of addition over multiplication (so placing +1 inside a product changes the result).",
+    "reasoning_pattern": "Transform the problem by multiplying by a factor that cancels the denominator at known inputs to create a polynomial with known integer roots, then determine its missing linear factor via evaluations at special points.",
     "logic_invariants": [
-      "Multiplication is associative: grouping of pure products without addition does not change the product value.",
-      "Addition is not distributively equivalent to arbitrary regroupings: (a·b)+1 generally differs from a·(b+1).",
-      "Operands' order (sequence of factors) is fixed; only grouping (parentheses) may change evaluation order.",
-      "Distinct parenthesizations may lead to equal numeric results in special cases (e.g., zeros or ones), but with given operands they can be distinct."
+      "For each given integer n in {2,3,4,5,6,7}, q(n) = (n^2 - 1)p(n) - n = 0.",
+      "deg q = deg p + 2 (here 7 = 5 + 2).",
+      "q(x) is divisible by P(x) = ∏_{k=2}^7 (x - k); therefore q(x) = (ax + b)P(x).",
+      "Evaluations at x = 1 and x = -1 eliminate the (x^2 - 1) factor so q(±1) equal -1 and +1 respectively, giving linear constraints on a and b independent of p(±1).",
+      "P(8) = 6! = 720 is used to scale q(8) and relates to factorial-like products of consecutive integers."
     ],
     "changeable_parameters": [
-      "Number of multiplicative factors before the +1 (length of factor chain).",
-      "Values of the multiplicative factors (positive integers, could include 0 or 1).",
-      "Position of the +1 relative to the chain (always at the end in this template, but could be inserted after other factors).",
-      "Type of operator used in the chain (e.g., multiplication, exponentiation) and position of the additive term.",
-      "Whether multiple additions are present instead of a single +1."
+      "degree_of_p (e.g., 4, 5, 6)",
+      "list_of_integer_points_where_values_known (start and length, consecutive or nonconsecutive)",
+      "value_formula_at_these_points (e.g., n/(n^2 - 1), linear in n, other rational forms)",
+      "auxiliary_factor_used (e.g., x^2 - 1 or x^2 - a) that clears denominators",
+      "target_evaluation_point (the x at which p(x) is requested)"
     ],
     "parameter_constraints": [
-      "Operands' sequence must remain fixed (no reordering allowed).",
-      "Parentheses may be inserted only to change evaluation order; binary operation semantics apply.",
-      "For the typical problem flavor, factors are positive integers >1 to avoid degenerate equalities caused by 0 or 1.",
-      "Exactly one additive term (like +1) is present to keep the counting tractable unless intentionally varied."
+      "Number of independent conditions provided must be consistent with deg p (to avoid under- or over-determined systems); with deg p = d, providing d+1 independent values determines p uniquely.",
+      "The auxiliary factor chosen should cancel denominators at the provided inputs (i.e., its zeros should match any n that make denominators zero) or be chosen so cancellations produce integer/known q(±1) values.",
+      "When representing q(x) = (ax + b)P(x), P(x) must have degree equal to the number of distinct known roots; to make q one degree higher, multiply P by a linear factor (ax + b).",
+      "Avoid selecting known input values that make denominator zero unless the construction explicitly handles the resulting indeterminate p(n)."
     ],
-    "answer_format": "integer (count of distinct numeric values); for multiple-choice instances: option letter corresponding to that count",
+    "answer_format": "Multiple-choice letter plus numeric content as a reduced rational fraction (e.g., 3/56).",
     "rendering_notes": [
-      "Preserve original <math>...</math> MathML tags exactly in question text and choices.",
-      "When generating new variants, use MathML for inline numeric expressions to match source format.",
-      "Ensure parentheses are rendered clearly (use explicit parentheses in MathML when describing grouping)."
+      "Preserve MathML tags exactly when rendering: all <math>...</math> and embedded <mi>, <mo>, <mn>, <mfrac>, <msup>, etc. must be kept.",
+      "generation_knobs: vary degree_of_p; vary consecutive integer range (length and start); vary numerator/denominator form (e.g., n/(n^2 - k), an+b over polynomial); change auxiliary factor (x^2 - 1 -> x^2 - c); change target evaluation point (8 -> other integer).",
+      "safe_variations: change the consecutive integer block while adjusting degree accordingly; replace n/(n^2-1) with other rational forms that are cleared by a simple auxiliary factor; ask for p at a different integer not among provided points.",
+      "unsafe_variations: include provided n that make denominators zero without adjusting construction (introduces undefined p(n) unless handled); pick value_formula that does not lead to a polynomial p of the specified degree; choose nonconsecutive points without providing enough conditions to determine the polynomial.",
+      "novelty_opportunities: use auxiliary factors of higher degree (e.g., (x^2 - a)(x - b)) to craft problems with multi-parameter linear factors; ask for coefficients of p rather than a single value; ask for p at a point inside the given set to test handling of removable singularities.",
+      "validation_rules: ensure the number of provided constraints matches degree+1 (or explicitly state additional structure to make the polynomial unique); verify that auxiliary factor zeros and provided input set are consistent; check arithmetic simplifications (factorials and cancellations) and fraction reduction."
     ],
     "risk_flags": [
-      "Counting all Catalan-number parenthesizations instead of only those that change the location of the addition (overcount).",
-      "Assuming associativity of addition across multiplication (i.e., thinking grouping can't change value) — leads to undercounting.",
-      "Including degenerate parameter choices like 0 or 1 that collapse multiple parenthesizations to the same numeric result, changing answer key.",
-      "Misreading 'no rearranging of factors' and allowing commutativity to produce new orders."
+      "Misinterpreting p(1) or p(-1): although p(±1) may be undefined because denominator zero, q(±1) are still well-defined and provide constraints.",
+      "Arithmetic errors in computing large products like P(1) or P(-1) (factorials) and sign mistakes when evaluating products of negatives.",
+      "For generated variants, accidentally producing an underdetermined or overdetermined system if the relationship between degree and number of points is not preserved.",
+      "Failing to reduce rational answers to lowest terms or mismatching the multiple-choice letter with the computed numeric value."
     ]
   },
   "known_values": {
-    "example_factors": [
+    "degree_of_p": 5,
+    "known_points": [
       2,
       3,
       4,
-      5
+      5,
+      6,
+      7
     ],
-    "example_additive_k": 1,
-    "example_total_parenthesizations": 5,
-    "example_distinct_results": 4,
-    "example_correct_choice_letter": "B"
+    "value_formula_at_known_points": "n/(n^2 - 1)",
+    "auxiliary_factor": "x^2 - 1",
+    "target_point": 8,
+    "example_correct_answer_letter": "C",
+    "example_correct_answer_content": "<math><mfrac><mn>3</mn><mn>56</mn></mfrac></math>"
   },
   "derived_values": {
-    "catalan_for_4_operands": 5,
-    "distinct_results_in_example": 4,
-    "example_evaluations": [
-      {
-        "parenthesization": "2·3·4·(5+1)",
-        "value": 144
-      },
-      {
-        "parenthesization": "2·3·(4·5+1)",
-        "value": 126
-      },
-      {
-        "parenthesization": "2·(3·4·5+1)",
-        "value": 122
-      },
-      {
-        "parenthesization": "(2·3·4·5)+1",
-        "value": 121
-      }
-    ]
+    "P_of_x_definition": "P(x) = ∏_{k=2}^7 (x - k)",
+    "P_of_8": 720,
+    "q_of_8": "<math><mfrac><mo>−</mo><mn>37</mn><mn>8</mn></mfrac></math>",
+    "p_of_8": "<math><mfrac><mn>3</mn><mn>56</mn></mfrac></math>"
   },
   "changeable_parameters": [
     {
-      "name": "number_of_multiplicative_factors",
-      "role": "How many multiplicative operands appear before the additive term",
+      "name": "degree_of_p",
+      "role": "degree of the polynomial p(x)",
       "value_type": "integer",
-      "current_value": 4,
-      "suggested_range": "3-6",
+      "current_value": 5,
+      "suggested_range": "4-7",
+      "constraints": [
+        "positive integer",
+        "typically between 3 and 7 for manageable arithmetic",
+        "controls number_of_known_points = degree_of_p + 1 by default"
+      ]
+    },
+    {
+      "name": "known_points_start",
+      "role": "start of a consecutive integer block used as known inputs (first n)",
+      "value_type": "integer",
+      "current_value": 2,
+      "suggested_range": "−3 to 5",
       "constraints": [
         "integer",
-        ">= 2",
-        "recommended 3-6 for SAT-style items"
+        "choose so that auxiliary_factor zeros are not inside the block unless intended",
+        "block will be known_points_start .. known_points_start + known_points_count - 1"
       ]
     },
     {
-      "name": "values_of_factors_in_order",
-      "role": "Ordered list of multiplicative factor values (do not reorder)",
-      "value_type": "list of integers",
-      "current_value": [
-        2,
-        3,
-        4,
-        5
-      ],
-      "suggested_range": "each integer 2-9 (avoid 0 or 1 unless allow_degenerate_factors_flag true)",
-      "constraints": [
-        "length must equal number_of_multiplicative_factors",
-        "each entry integer",
-        "prefer integers >1 to avoid degenerate equalities"
-      ]
-    },
-    {
-      "name": "additive_term_value_k",
-      "role": "The integer added (e.g., the '+1' in the source)",
+      "name": "known_points_count",
+      "role": "number of consecutive known integer inputs",
       "value_type": "integer",
-      "current_value": 1,
-      "suggested_range": "1-6",
+      "current_value": 6,
+      "suggested_range": "degree_of_p + 1",
       "constraints": [
-        "integer",
-        "prefer small positive integers",
-        "can be varied to change distinct-result counts"
+        "must equal degree_of_p + 1 unless additional structure is provided",
+        "positive integer"
       ]
     },
     {
-      "name": "position_of_additive_term",
-      "role": "Which grouping places the additive term inside a product factor vs applied after multiplication (affects counting)",
-      "value_type": "enumeration",
-      "current_value": "attached to last operand (as '+k' after last factor)",
-      "suggested_range": "attach inside factor i via grouping or apply after all multiplications",
+      "name": "value_formula_template",
+      "role": "formula for p(n) at known integer inputs (use n as placeholder)",
+      "value_type": "string",
+      "current_value": "n/(n^2 - 1)",
+      "suggested_range": "rational expressions in n that can be cleared by a low-degree auxiliary factor",
       "constraints": [
-        "must not reorder operands; position refers to grouping only",
-        "generator should enumerate placements that are achievable by parenthesization"
+        "should evaluate to a rational number for each known point",
+        "denominators should be cancelable by the chosen auxiliary_factor"
       ]
     },
     {
-      "name": "allow_degenerate_factors_flag",
-      "role": "Whether factors may include 0 or 1 (degenerate cases permitted)",
-      "value_type": "boolean",
-      "current_value": false,
-      "suggested_range": "true or false",
+      "name": "auxiliary_factor",
+      "role": "polynomial factor multiplied by p(x) to clear denominators and create integer roots",
+      "value_type": "string",
+      "current_value": "x^2 - 1",
+      "suggested_range": "low-degree polynomials like x^2 - c, x - c, (x^2 - c)(x - d)",
       "constraints": [
-        "if true, many parenthesizations may evaluate to same result; generator must recalc distinct counts accordingly",
-        "default false for standard problems"
+        "must vanish at any known point where value_formula denominator is zero",
+        "degree should be small (1 or 2) for solvable linear-factor cases"
       ]
     },
     {
-      "name": "number_of_additive_terms",
-      "role": "How many additive terms (default one)",
+      "name": "target_evaluation_point",
+      "role": "the x-value where p(x) is requested",
       "value_type": "integer",
-      "current_value": 1,
-      "suggested_range": "1-2 (keeping 1 is recommended)",
+      "current_value": 8,
+      "suggested_range": "an integer not in known_points (but can be adjacent)",
       "constraints": [
-        "if >1, problem complexity increases; define precisely where each additive term is placed"
+        "preferably not one of the known_points",
+        "chosen so that target^2 - c (denominator of recovery formula) is nonzero"
       ]
     }
   ],
   "generation_guidance": [
-    "must_change: Each generated instance must change at least one structural element: number_of_multiplicative_factors OR position_of_additive_term OR values_of_factors_in_order (not just cosmetic number substitution).",
-    "allowed_variations: Change the count of factors (recommended 3-6), change factor values (integers >1), change additive k, move +k via grouping to different factor positions, optionally allow one additive term only unless explicitly varying template.",
-    "forbidden_variations: Do not reorder factors (commutativity not allowed), do not silently allow 0 or 1 as factors unless allow_degenerate_factors_flag is explicitly set, do not replace multiplication with other operators unless defining a new template.",
-    "instance_acceptance_rule: Novelty — new instance must not be identical in both factor sequence and additive-position parenthesization set to any example in known_values; either factor list or number_of_factors or additive placement must differ.",
-    "instance_acceptance_rule: Mathematical validity — for the chosen parameters, enumerate all full parenthesizations of the fixed operand sequence, evaluate each exactly, and compute the set of distinct numeric results; the reported answer equals the size of that set.",
-    "instance_acceptance_rule: Degeneracy check — if allow_degenerate_factors_flag is false, reject instances containing factor 0 or 1; if true, require explanation note that degeneracy may reduce distinct counts.",
-    "validation_hint: After generation, compute Catalan(n-1) parenthesizations for n factors and verify the distinct-results count is correctly determined by evaluation (not by counting trees).",
-    "distractors_guidance: For multiple-choice, construct distractors that are off-by-one from the true count and the Catalan number for n-1 to catch common errors (under/overcounting).",
-    "presentation: Use MathML (<math>...</math>) for inline expressions and explicit parentheses for each parenthesization shown in explanation."
+    "must_change: For each generated instance change at least one of {degree_of_p, known_points_start, value_formula_template, auxiliary_factor, target_evaluation_point} so the new instance is materially different.",
+    "allowed_variations: vary degree_of_p within suggested_range and set known_points_count = degree_of_p + 1; shift the consecutive block (known_points_start) and recompute P(x) accordingly.",
+    "allowed_variations: replace value_formula_template with other rational forms like (an + b)/(n^2 - c) provided auxiliary_factor is updated to cancel denominators.",
+    "allowed_variations: change auxiliary_factor to a different low-degree polynomial that cancels denominators at known points (e.g., x^2 - c or (x - c)(x - d)).",
+    "forbidden_variations: do not choose known_points_count different from degree_of_p + 1 unless extra constraints are explicitly provided (would under/overdetermine the polynomial).",
+    "forbidden_variations: do not include known points that make denominators zero unless auxiliary_factor includes those zeros to cancel them.",
+    "instance_acceptance_rules: validate that number_of_known_points == degree_of_p + 1 (unless the generator includes extra structure); validate that auxiliary_factor zeros include any n that make denominators zero; verify target_evaluation_point is not in known_points unless problem intends a removable singularity case.",
+    "instance_acceptance_rules: compute q(x) = auxiliary_factor·p(x) - (appropriate polynomial in x from rearranging given values) and ensure q(x) factors as (linear_factor)·P(x) with consistent linear_factor degree; verify arithmetic (P(target), q(target), p(target)) and reduce final fraction to lowest terms.",
+    "distractor_guidance: produce distractors reflecting common mistakes: using P(target) off by a factor, sign errors in q(target), failing to reduce fraction, or swapping numerator/denominator in intermediate steps.",
+    "novelty_guidance: prefer structural variations (different auxiliary_factor, different formula family, different degree) over trivial numeric substitutions to keep reasoning pattern but create new algebraic work.",
+    "validation_examples: derive P(target) explicitly and compute q at special points (roots of auxiliary_factor) to solve for linear_factor before evaluating at target; check that final answer matches one of the rendered choices exactly in MathML."
   ],
-  "fallback_generation_hint": "Vary the number of multiplicative factors to 3–5 and keep small integer factors (2–6) with additive k between 1 and 3; enumerate parenthesizations and compute distinct evaluation results to produce a valid question and answer."
+  "fallback_generation_hint": "If structural generation fails, produce an instance by shifting the consecutive block by +1 (start at 3), keep degree_of_p = 5, use value_formula n/(n^2 - 1) and auxiliary_factor x^2 - 1, and set target = start + count (e.g., ask for p(9)). This preserves solvability and keeps novelty while ensuring arithmetic stays manageable."
 }

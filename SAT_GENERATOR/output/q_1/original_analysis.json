@@ -5,63 +5,69 @@
     "difficulty": "Hard",
     "type": "multiple-choice",
     "skill": "",
-    "question_text": "How many distinct values can be obtained from <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn></math> by inserting parentheses (no rearranging of factors)?",
+    "question_text": "Let <math><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo></math> be a polynomial of degree <math><mn>5</mn></math> such that <math><mi>p</mi><mo>(</mo><mi>n</mi><mo>)</mo><mo>=</mo><mfrac><mi>n</mi><mrow><msup><mi>n</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac></math> for <math><mi>n</mi><mo>=</mo><mn>2</mn></math>, <math><mn>3</mn></math>, <math><mn>4</mn></math>, <math><mn>5</mn></math>, <math><mn>6</mn></math>, <math><mn>7</mn></math>. Find <math><mi>p</mi><mo>(</mo><mn>8</mn><mo>)</mo></math>.",
     "choices": [
-      "<math><mn>3</mn></math>",
-      "<math><mn>4</mn></math>",
-      "<math><mn>5</mn></math>",
-      "<math><mn>6</mn></math>"
+      "<math><mfrac><mn>1</mn><mn>7</mn></mfrac></math>",
+      "<math><mfrac><mn>5</mn><mn>72</mn></mfrac></math>",
+      "<math><mfrac><mn>3</mn><mn>56</mn></mfrac></math>",
+      "<math><mfrac><mn>37</mn><mn>448</mn></mfrac></math>"
     ],
     "correct_answer": [
-      "B"
+      "C"
     ],
-    "explanation": "Only the placement of the <math><mo>+</mo><mn>1</mn></math> changes the value. The four possibilities are <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mo>(</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>144</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>126</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>122</mn></math>, and <math><mo>(</mo><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>)</mo><mo>+</mo><mn>1</mn><mo>=</mo><mn>121</mn></math>."
+    "explanation": "Define <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>(</mo><msup><mi>x</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn><mo>)</mo><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>−</mo><mi>x</mi></mrow></math>. Then <math><mi>q</mi></math> has degree <math><mn>7</mn></math> and zeros at <math><mi>n</mi><mo>=</mo><mn>2</mn></math> to <math><mn>7</mn></math>, so <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mo>−</mo><mrow><mo>(</mo><mn>29</mn><mi>x</mi><mo>+</mo><mn>27</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>2</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>3</mn><mo>)</mo><mo>⋯</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>7</mn><mo>)</mo></mrow></mfrac><mn>40320</mn></math> using the conditions <math><mi>q</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>=</mo><mo>−</mo><mn>1</mn></math> and <math><mi>q</mi><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>1</mn></math>. Evaluating gives <math><mi>q</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>=</mo><mo>−</mo><mfrac><mn>37</mn><mn>8</mn></mfrac></math>, so <math><mi>p</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>=</mo><mfrac><mrow><mi>q</mi><mo>(</mo><mn>8</mn><mo>)</mo><mo>+</mo><mn>8</mn></mrow><mrow><msup><mn>8</mn><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>56</mn></mfrac></math>."
   },
   "derived_fields": {
-    "skill": "Order of operations / Parenthesization effects",
-    "sub_skill": "Counting distinct evaluation results under different parenthesizations; associativity awareness",
-    "problem_family": "Parentheses placement and evaluation-order effects on mixed operations (multiplication and addition); counting distinct numeric outcomes from different binary tree parenthesizations",
+    "skill": "Polynomial construction and evaluation",
+    "sub_skill": "Using auxiliary polynomials and root-factorization to determine coefficients",
+    "problem_family": "Find the value of a polynomial at a new point given its values at several integers by constructing an auxiliary polynomial with prescribed roots",
     "solve_strategy": [
-      "Enumerate all structurally different full parenthesizations (binary trees) consistent with the given operand order that can change where the +1 is applied.",
-      "Identify which parenthesizations actually change the numerical effect of the +1 (i.e., whether +1 is inside some product factor or applied after all multiplications).",
-      "Evaluate each distinct relevant parenthesization numerically and collect distinct results.",
-      "Count distinct outcomes and map to appropriate answer choice."
+      "Introduce q(x) = (x^2 - 1) p(x) - x so that q(n)=0 for the given integer inputs n because (n^2-1)p(n)-n = 0.",
+      "Recognize deg q = deg p + 2, so q is degree 7 and thus equals (ax + b) * P(x), where P(x) = ∏_{k=2}^7 (x - k).",
+      "Use evaluations at x=1 and x=-1 to produce two linear equations for a and b (these points annihilate the (x^2-1) factor so q(±1) give small integers).",
+      "Solve the 2×2 linear system for a and b, compute P(8) and evaluate q(8) = (a*8 + b)*P(8).",
+      "Recover p(8) from p(8) = (q(8) + 8)/(8^2 - 1) and reduce the resulting fraction."
     ],
-    "reasoning_pattern": "Case analysis over possible parenthesizations combined with application of associativity of multiplication and non-distributivity of addition over multiplication (so placing +1 inside a product changes the result).",
+    "reasoning_pattern": "Transform the problem by multiplying by a factor that cancels the denominator at known inputs to create a polynomial with known integer roots, then determine its missing linear factor via evaluations at special points.",
     "logic_invariants": [
-      "Multiplication is associative: grouping of pure products without addition does not change the product value.",
-      "Addition is not distributively equivalent to arbitrary regroupings: (a·b)+1 generally differs from a·(b+1).",
-      "Operands' order (sequence of factors) is fixed; only grouping (parentheses) may change evaluation order.",
-      "Distinct parenthesizations may lead to equal numeric results in special cases (e.g., zeros or ones), but with given operands they can be distinct."
+      "For each given integer n in {2,3,4,5,6,7}, q(n) = (n^2 - 1)p(n) - n = 0.",
+      "deg q = deg p + 2 (here 7 = 5 + 2).",
+      "q(x) is divisible by P(x) = ∏_{k=2}^7 (x - k); therefore q(x) = (ax + b)P(x).",
+      "Evaluations at x = 1 and x = -1 eliminate the (x^2 - 1) factor so q(±1) equal -1 and +1 respectively, giving linear constraints on a and b independent of p(±1).",
+      "P(8) = 6! = 720 is used to scale q(8) and relates to factorial-like products of consecutive integers."
     ],
     "changeable_parameters": [
-      "Number of multiplicative factors before the +1 (length of factor chain).",
-      "Values of the multiplicative factors (positive integers, could include 0 or 1).",
-      "Position of the +1 relative to the chain (always at the end in this template, but could be inserted after other factors).",
-      "Type of operator used in the chain (e.g., multiplication, exponentiation) and position of the additive term.",
-      "Whether multiple additions are present instead of a single +1."
+      "degree_of_p (e.g., 4, 5, 6)",
+      "list_of_integer_points_where_values_known (start and length, consecutive or nonconsecutive)",
+      "value_formula_at_these_points (e.g., n/(n^2 - 1), linear in n, other rational forms)",
+      "auxiliary_factor_used (e.g., x^2 - 1 or x^2 - a) that clears denominators",
+      "target_evaluation_point (the x at which p(x) is requested)"
     ],
     "parameter_constraints": [
-      "Operands' sequence must remain fixed (no reordering allowed).",
-      "Parentheses may be inserted only to change evaluation order; binary operation semantics apply.",
-      "For the typical problem flavor, factors are positive integers >1 to avoid degenerate equalities caused by 0 or 1.",
-      "Exactly one additive term (like +1) is present to keep the counting tractable unless intentionally varied."
+      "Number of independent conditions provided must be consistent with deg p (to avoid under- or over-determined systems); with deg p = d, providing d+1 independent values determines p uniquely.",
+      "The auxiliary factor chosen should cancel denominators at the provided inputs (i.e., its zeros should match any n that make denominators zero) or be chosen so cancellations produce integer/known q(±1) values.",
+      "When representing q(x) = (ax + b)P(x), P(x) must have degree equal to the number of distinct known roots; to make q one degree higher, multiply P by a linear factor (ax + b).",
+      "Avoid selecting known input values that make denominator zero unless the construction explicitly handles the resulting indeterminate p(n)."
     ],
-    "answer_format": "integer (count of distinct numeric values); for multiple-choice instances: option letter corresponding to that count",
+    "answer_format": "Multiple-choice letter plus numeric content as a reduced rational fraction (e.g., 3/56).",
     "rendering_notes": [
-      "Preserve original <math>...</math> MathML tags exactly in question text and choices.",
-      "When generating new variants, use MathML for inline numeric expressions to match source format.",
-      "Ensure parentheses are rendered clearly (use explicit parentheses in MathML when describing grouping)."
+      "Preserve MathML tags exactly when rendering: all <math>...</math> and embedded <mi>, <mo>, <mn>, <mfrac>, <msup>, etc. must be kept.",
+      "generation_knobs: vary degree_of_p; vary consecutive integer range (length and start); vary numerator/denominator form (e.g., n/(n^2 - k), an+b over polynomial); change auxiliary factor (x^2 - 1 -> x^2 - c); change target evaluation point (8 -> other integer).",
+      "safe_variations: change the consecutive integer block while adjusting degree accordingly; replace n/(n^2-1) with other rational forms that are cleared by a simple auxiliary factor; ask for p at a different integer not among provided points.",
+      "unsafe_variations: include provided n that make denominators zero without adjusting construction (introduces undefined p(n) unless handled); pick value_formula that does not lead to a polynomial p of the specified degree; choose nonconsecutive points without providing enough conditions to determine the polynomial.",
+      "novelty_opportunities: use auxiliary factors of higher degree (e.g., (x^2 - a)(x - b)) to craft problems with multi-parameter linear factors; ask for coefficients of p rather than a single value; ask for p at a point inside the given set to test handling of removable singularities.",
+      "validation_rules: ensure the number of provided constraints matches degree+1 (or explicitly state additional structure to make the polynomial unique); verify that auxiliary factor zeros and provided input set are consistent; check arithmetic simplifications (factorials and cancellations) and fraction reduction."
     ],
     "risk_flags": [
-      "Counting all Catalan-number parenthesizations instead of only those that change the location of the addition (overcount).",
-      "Assuming associativity of addition across multiplication (i.e., thinking grouping can't change value) — leads to undercounting.",
-      "Including degenerate parameter choices like 0 or 1 that collapse multiple parenthesizations to the same numeric result, changing answer key.",
-      "Misreading 'no rearranging of factors' and allowing commutativity to produce new orders."
+      "Misinterpreting p(1) or p(-1): although p(±1) may be undefined because denominator zero, q(±1) are still well-defined and provide constraints.",
+      "Arithmetic errors in computing large products like P(1) or P(-1) (factorials) and sign mistakes when evaluating products of negatives.",
+      "For generated variants, accidentally producing an underdetermined or overdetermined system if the relationship between degree and number of points is not preserved.",
+      "Failing to reduce rational answers to lowest terms or mismatching the multiple-choice letter with the computed numeric value."
     ]
   },
   "missing_source_fields": [
-    "skill"
+    "skill",
+    "step_by_step_solution"
   ],
-  "confidence": 0.86
+  "confidence": 0.88
 }

@@ -1,25 +1,34 @@
 {
-  "question": "How many distinct values can be obtained from <math><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>+</mo><mn>2</mn></math> by inserting parentheses (no rearranging of factors)?",
-  "explanation": "There are five full parenthesizations of the four operands 3, 4, 6, 2 (with operators ·, ·, +). Evaluate each grouping: <math><mo>(</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>)</mo><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>74</mn></math>, <math><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>)</mo><mo>+</mo><mn>2</mn><mo>=</mo><mn>74</mn></math>, <math><mo>(</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>)</mo><mo>&#x22C5;</mo><mo>(</mo><mn>6</mn><mo>+</mo><mn>2</mn><mo>)</mo><mo>)</mo><mo>=</mo><mn>96</mn></math>, <math><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>78</mn></math>, and <math><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mo>(</mo><mn>6</mn><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>96</mn></math>. The distinct values that appear are 74, 78, and 96, so there are 3 distinct results.",
+  "question": "Let <math><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo></math> be a polynomial of degree <math><mn>5</mn></math> such that <math><mi>p</mi><mo>(</mo><mi>n</mi><mo>)</mo><mo>=</mo><mfrac><mi>n</mi><mrow><msup><mi>n</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac></math> for <math><mi>n</mi><mo>=</mo><mn>3</mn></math>, <math><mn>4</mn></math>, <math><mn>5</mn></math>, <math><mn>6</mn></math>, <math><mn>7</mn></math>, <math><mn>8</mn></math>. Find <math><mi>p</mi><mo>(</mo><mn>9</mn><mo>)</mo></math>.",
+  "explanation": "Define <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>(</mo><msup><mi>x</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn><mo>)</mo><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>−</mo><mi>x</mi></mrow></math>. For each given integer <math><mi>n</mi></math> from <math><mn>3</mn></math> to <math><mn>8</mn></math>, we have <math><mi>q</mi><mo>(</mo><mi>n</mi><mo>)</mo><mo>=</mo><mo>(</mo><msup><mi>n</mi><mn>2</mn></msup><mo>−</mo><mn>1</mn><mo>)</mo><mi>p</mi><mo>(</mo><mi>n</mi><mo>)</mo><mo>−</mo><mi>n</mi><mo>=</mo><mn>0</mn></math>, so <math><mi>q</mi></math> is a degree-7 polynomial divisible by <math><mi>P</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mo>∏</mo><mrow><mo>(</mo><mi>x</mi><mo>−</mo><mn>3</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>4</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>5</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>6</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>7</mn><mo>)</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>8</mn><mo>)</mo></mrow>.</math> Hence <math><mi>q</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>(</mo><mi>a</mi><mi>x</mi><mo>+</mo><mi>b</mi><mo>)</mo><mi>P</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math> for constants <math><mi>a</mi></math> and <math><mi>b</mi></math>.\n\nEvaluate at <math><mn>1</mn></math> and <math><mo>−</mo><mn>1</mn></math>. Since <math><msup><mn>1</mn><mn>2</mn></msup><mo>−</mo><mn>1</mn><mo>=</mo><mn>0</mn></math>, we get <math><mi>q</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>=</mo><mo>−</mo><mn>1</mn></math>; similarly <math><mi>q</mi><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>1</mn></math>. Compute <math><mi>P</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>3</mn><mo>)</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>4</mn><mo>)</mo><mo>⋯</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>8</mn><mo>)</mo><mo>=</mo><mn>5040</mn></math> and <math><mi>P</mi><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>=</mo><mo>(</mo><mo>−</mo><mn>4</mn><mo>)</mo><mo>(</mo><mo>−</mo><mn>5</mn><mo>)</mo>⋯<mo>(</mo><mo>−</mo><mn>9</mn><mo>)</mo><mo>=</mo><mn>60480</mn></math>. Thus\n\n<math><mrow><mi>a</mi><mo>+</mo><mi>b</mi><mo>=</mo><mfrac><mo>−</mo><mn>1</mn><mn>5040</mn></mfrac>,</mrow></math>\n<math><mrow><mo>−</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>=</mo><mfrac><mn>1</mn><mn>60480</mn></mfrac>.</mrow></math>\nSolving gives <math><mi>a</mi><mo>=</mo><mfrac><mo>−</mo><mn>13</mn><mn>120960</mn></mfrac></math> and <math><mi>b</mi><mo>=</mo><mfrac><mo>−</mo><mn>11</mn><mn>120960</mn></mfrac>.</math>\n\nTo find <math><mi>p</mi><mo>(</mo><mn>9</mn><mo>)</mo></math>, compute <math><mi>P</mi><mo>(</mo><mn>9</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>9</mn><mo>−</mo><mn>3</mn><mo>)</mo>⋯<mo>(</mo><mn>9</mn><mo>−</mo><mn>8</mn><mo>)</mo><mo>=</mo><mn>720</mn></math>. Then\n\n<math><mi>q</mi><mo>(</mo><mn>9</mn><mo>)</mo><mo>=</mo><mfrac><mrow><mo>−</mo><mn>13</mn><mi>·</mi><mn>9</mn><mo>−</mo><mn>11</mn></mrow><mn>120960</mn></mfrac><mi>·</mi><mn>720</mn><mo>=</mo><mfrac><mo>−</mo><mn>128</mn><mn>120960</mn><mi>·</mi><mn>720</mn></mfrac><mo>=</mo><mfrac><mo>−</mo><mn>16</mn><mn>21</mn></mfrac>.</math>\n\nFinally recover\n\n<math><mi>p</mi><mo>(</mo><mn>9</mn><mo>)</mo><mo>=</mo><mfrac><mrow><mi>q</mi><mo>(</mo><mn>9</mn><mo>)</mo><mo>+</mo><mn>9</mn></mrow><mrow><msup><mn>9</mn><mn>2</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mrow><mo>−</mo><mfrac><mn>16</mn><mn>21</mn></mfrac><mo>+</mo><mn>9</mn></mrow><mn>80</mn></mfrac><mo>=</mo><mfrac><mn>173</mn><mn>1680</mn></mfrac>.</math>\n\nThus <math><mi>p</mi><mo>(</mo><mn>9</mn><mo>)</mo><mo>=</mo><mfrac><mn>173</mn><mn>1680</mn></mfrac>.</math>",
   "choices": [
-    "<math><mn>2</mn></math>",
-    "<math><mn>3</mn></math>",
-    "<math><mn>4</mn></math>",
-    "<math><mn>5</mn></math>"
+    "<math><mfrac><mn>173</mn><mn>1680</mn></mfrac></math>",
+    "<math><mfrac><mn>173</mn><mn>1440</mn></mfrac></math>",
+    "<math><mfrac><mn>11</mn><mn>168</mn></mfrac></math>",
+    "<math><mfrac><mn>13</mn><mn>120</mn></mfrac></math>"
   ],
-  "correct_answer_letter": "B",
-  "correct_answer": "<math><mn>3</mn></math>",
+  "correct_answer_letter": "A",
+  "correct_answer": "<math><mfrac><mn>173</mn><mn>1680</mn></mfrac></math>",
   "parameter_values": {
-    "number_of_multiplicative_factors": 3,
-    "values_of_factors_in_order": [
+    "degree_of_p": 5,
+    "known_points": [
       3,
       4,
-      6
+      5,
+      6,
+      7,
+      8
     ],
-    "additive_term_value_k": 2,
-    "position_of_additive_term": "attached to last operand (as '+k' after last factor)",
-    "allow_degenerate_factors_flag": false,
-    "number_of_additive_terms": 1
+    "value_formula_at_known_points": "n/(n^2 - 1)",
+    "auxiliary_factor": "x^2 - 1",
+    "target_point": 9,
+    "P_of_1": 5040,
+    "P_of_minus1": 60480,
+    "P_of_9": 720,
+    "a_value": "-13/120960",
+    "b_value": "-11/120960",
+    "q_of_9": "-16/21",
+    "p_of_9": "173/1680"
   },
-  "derivation_summary": "Enumerate the five full parenthesizations of 3 · 4 · 6 + 2, evaluate each grouping, and collect distinct numeric results: evaluations yield 74, 74, 96, 78, 96, giving three distinct values."
+  "derivation_summary": "Construct q(x) = (x^2-1)p(x)-x with roots at the six given integers, write q(x)=(ax+b)P(x), determine a and b from q(1) and q(-1), evaluate q(9) then recover p(9) = (q(9)+9)/(81-1)."
 }

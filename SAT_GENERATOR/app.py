@@ -82,17 +82,14 @@ def _to_bool(value: Any, default: bool = False) -> bool:
 
 
 def _extract_flow_mode(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract solver/generator mode toggles from API payload."""
-    use_openai_basic = _to_bool(data.get("use_openai_basic"), False)
-    use_openai_basic_solver = use_openai_basic or _to_bool(data.get("use_openai_basic_solver"), False)
-    use_openai_basic_generator = use_openai_basic or _to_bool(data.get("use_openai_basic_generator"), False)
+    """Extract active flow configuration from API payload."""
 
     model = (data.get("model") or "gpt-4o-mini").strip()
     creative_mode = _to_bool(data.get("creative_mode"), False)
 
     return {
-        "use_openai_basic_solver": use_openai_basic_solver,
-        "use_openai_basic_generator": use_openai_basic_generator,
+        "inference_provider": "openai",
+        "inference_mode": "basic",
         "model": model,
         "creative_mode": creative_mode,
     }
@@ -145,7 +142,7 @@ def get_question(question_id: str):
 
 @app.route("/api/run-flow", methods=["POST"])
 def api_run_flow():
-    """Chạy run_flow với question_id và mode toggles trong body. Trả về new_question_text + answer_result."""
+    """Chạy run_flow với question_id trong body. Trả về new_question_text + answer_result."""
     data = request.get_json() or {}
     question_id = (data.get("question_id") or "").strip()
     if not question_id:
@@ -168,8 +165,6 @@ def api_run_flow():
         out_dir=str(BASE_DIR),
         steps_json_path="steps_function_and_meaning.json",
         verbose=True,
-        use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
-        use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
         model=mode_cfg["model"],
         creative_mode=mode_cfg["creative_mode"],
     )
@@ -321,11 +316,8 @@ def api_run_flow_batch():
             out_dir=str(BASE_DIR / "output"),
             steps_json_path="steps_function_and_meaning.json",
             verbose=True,
-            use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
-            use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
             model=mode_cfg["model"],
             creative_mode=mode_cfg["creative_mode"],
-            debug_stage_c=True
         ):
             payload = _format_flow_result(item["result"])
             payload["index"] = item["index"]

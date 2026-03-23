@@ -405,18 +405,6 @@
     </div>
 
     <div class="switch-row">
-      <label class="switch-item" title="Bật OpenAI basic cho cả solver và generator">
-        <input type="checkbox" id="toggleOpenAIBasic" />
-        <span>OpenAI basic (both)</span>
-      </label>
-      <label class="switch-item" title="Chỉ bật OpenAI basic solver">
-        <input type="checkbox" id="toggleOpenAIBasicSolver" />
-        <span>OpenAI basic solver</span>
-      </label>
-      <label class="switch-item" title="Chỉ bật OpenAI basic generator">
-        <input type="checkbox" id="toggleOpenAIBasicGenerator" />
-        <span>OpenAI basic generator</span>
-      </label>
       <label class="switch-item" title="Creative mode (tạo scenario mới)">
         <input type="checkbox" id="toggleCreativeMode" />
         <span>Creative mode</span>
@@ -454,9 +442,6 @@
     const btnLoad = document.getElementById("btnLoad");
     const btnFlow = document.getElementById("btnFlow");
     const originalContent = document.getElementById("originalContent");
-    const toggleOpenAIBasic = document.getElementById("toggleOpenAIBasic");
-    const toggleOpenAIBasicSolver = document.getElementById("toggleOpenAIBasicSolver");
-    const toggleOpenAIBasicGenerator = document.getElementById("toggleOpenAIBasicGenerator");
     const toggleCreativeMode = document.getElementById("toggleCreativeMode");
 
     // Progress
@@ -485,9 +470,6 @@
     function getModePayload() {
       return {
         model: (modelNameEl.value || "gpt-4o-mini").trim(),
-        use_openai_basic: !!toggleOpenAIBasic.checked,
-        use_openai_basic_solver: !!toggleOpenAIBasicSolver.checked,
-        use_openai_basic_generator: !!toggleOpenAIBasicGenerator.checked,
         creative_mode: !!toggleCreativeMode.checked,
       };
     }
@@ -495,10 +477,8 @@
     function formatMode(mode) {
       if (!mode) return "mode: default";
       const tags = [];
-      if (mode.use_openai_basic_solver) tags.push("oa-basic-solver");
-      if (mode.use_openai_basic_generator) tags.push("oa-basic-generator");
+      tags.push("openai-basic");
       if (mode.creative_mode) tags.push("creative");
-      if (!tags.length) tags.push("default");
       if (mode.model) tags.push(mode.model);
       return `mode: ${tags.join(" | ")}`;
     }

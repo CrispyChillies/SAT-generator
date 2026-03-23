@@ -1,6 +1,6 @@
 # SAT – Luồng sinh câu hỏi và đáp án
 
-Dự án sinh câu hỏi SAT mới từ câu mẫu: Agent giải bài → xuất steps (hàm + ý nghĩa tham số) → LLM sinh câu hỏi mới + explanation + đáp án (và 4 choices nếu multiple-choice) → Solver tính đáp án cho câu mới. So sánh đáp án C vs D bằng LLM; nếu khớp có thể lưu câu hỏi vào thư mục `data/`.
+Dự án sinh câu hỏi SAT mới từ câu mẫu: OpenAI solver giải bài → xuất steps (hàm + ý nghĩa tham số) → LLM sinh câu hỏi mới + explanation + đáp án (và 4 choices nếu multiple-choice) → Solver tính đáp án cho câu mới. So sánh đáp án C vs D bằng LLM; nếu khớp có thể lưu câu hỏi vào thư mục `data/`.
 
 ---
 
@@ -21,13 +21,13 @@ Dự án sinh câu hỏi SAT mới từ câu mẫu: Agent giải bài → xuất
 
 ```
 A (question / explanation / correct_answer)
-   ├─→ B: Agent sinh steps_function_and_meaning.json
+  ├─→ B: OpenAI solver sinh steps_function_and_meaning.json
    ├─→ C: Gen câu hỏi mới, explanation và đáp án (4 choices nếu multiple-choice)
    └─→ D: Sinh đáp án cho câu hỏi mới (dựa vào file JSON từ B và câu hỏi từ C)
 ```
 
 - **A**: Đầu vào là một câu mẫu (question, explanation, correct_answer, choices nếu có) từ `questions_practice_test.json`.
-- **B**: Agent (LangGraph) giải bài → tạo file `steps_function_and_meaning.json` (tên hàm + ý nghĩa tham số từng bước).
+- **B**: OpenAI basic solver giải bài → tạo file `steps_function_and_meaning.json` (tên hàm + ý nghĩa tham số từng bước).
 - **C**: Module sinh câu hỏi mới, **explanation** và **đáp án** (chỉ đổi số, giữ format HTML/MathML). Nếu là **multiple-choice** thì sinh đúng **4 lựa chọn** (A, B, C, D) và **1 đáp án đúng** (chữ cái).
 - **D**: Dùng file steps từ B và câu hỏi mới từ C → `sat_math_solver` tính đáp án cho câu mới.
 
@@ -37,13 +37,13 @@ A (question / explanation / correct_answer)
 
 | Thư mục / File | Mô tả |
 |----------------|--------|
-| `agent.py` | Agent LangGraph giải bài toán, xuất steps (hàm + param meaning). |
+| `openai_basic_math_solver.py` | OpenAI basic solver giải bài toán, xuất steps (hàm + param meaning). |
 | `generate_question_langchain.py` | Sinh câu hỏi mới + explanation + đáp án (và 4 choices nếu multiple-choice). |
 | `sat_math_solver.py` | Solver: dùng steps JSON + câu hỏi mới → gọi tools theo thứ tự, trả về đáp án. |
 | `run_flow.py` | Chạy toàn bộ luồng A → B → C → D (CLI). |
 | `app.py` | Web demo Flask: xem câu gốc, chạy flow, so sánh C vs D (LLM), Save sample vào `data/`. |
 | `templates/demo.html` | Giao diện web demo. |
-| `tools.py` | Các math tools (add, multiply, …) dùng bởi Agent và Solver. |
+| `tools.py` | Các math tools (add, multiply, …) dùng bởi solver cho bước D. |
 | `mathml_parser.py` | Parse MathML sang text đọc được. |
 | `questions_practice_test.json` | Danh sách câu mẫu (đầu vào). |
 | `steps_function_and_meaning.json` | File steps do bước B tạo (đầu vào cho D). |
@@ -57,7 +57,7 @@ A (question / explanation / correct_answer)
 - **Python 3.10+**
 - [uv](https://github.com/astral-sh/uv) (hoặc pip)
 - **OpenAI API key**
-- Các thư viện trong `requirements.txt`: `langchain-openai`, `langgraph`, `pydantic`, `python-dotenv`, `flask`, …
+- Các thư viện trong `requirements.txt`: `langchain-openai`, `pydantic`, `python-dotenv`, `flask`, …
 
 ### Cài đặt (dùng uv)
 
@@ -185,11 +185,11 @@ Mở trình duyệt: **http://localhost:5000**
 
 ## Các module chính
 
-- **agent.py**: LangGraph math agent — giải bài theo explanation, gọi tools (add, multiply, …), mỗi bước có node giải thích ý nghĩa tham số; xuất `ExecutionTrace` và export steps ra JSON.
+- **openai_basic_math_solver.py**: OpenAI basic math solver — giải bài theo explanation bằng direct inference; xuất `ExecutionTrace` và export steps ra JSON.
 - **generate_question_langchain.py**: LLM sinh câu hỏi mới + explanation + đáp án từ câu mẫu (chỉ đổi số, giữ format). Multiple-choice: sinh đúng 4 choices + correct_answer_letter (A/B/C/D). Hàm `load_sample_question` dùng chung cho run_flow và app.
 - **sat_math_solver.py**: Đọc `steps_function_and_meaning.json`, với câu hỏi mới gọi từng step (tool + param meaning), LLM chọn giá trị tham số → trả về `final_result`.
 - **app.py**: Flask app — trang demo, API run-flow, so sánh C vs D bằng LLM (`_answers_match_llm`), API save-question ghi file vào `data/`.
-- **tools.py**: Định nghĩa các math tools (add, multiply, divide, …) dùng bởi Agent và Solver.
+- **tools.py**: Định nghĩa các math tools (add, multiply, divide, …) dùng bởi solver cho bước D.
 
 ---
 
@@ -213,7 +213,7 @@ Thư mục **`data/`** chứa các câu hỏi đã sinh khi người dùng bấm
                     |                                 |
         ┌───────────┴───────────┐         ┌──────────┴──────────┐
         ↓           ↓           ↓         ↓          ↓          ↓
-     Agent    Generate      Solve     Analyze   Generate   Validate
+    Solver   Generate      Solve     Analyze   Generate   Validate
         |           |           |         |          |          |
    Steps JSON  New Question  Answer   Reasoning  New Q   Validation
 ```

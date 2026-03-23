@@ -4,7 +4,7 @@ Unified flow for generating SAT questions (Math and Reading & Writing).
 
 Math Flow:
   A (question / explanation / correct_answer)
-   ├─→ B: Agent sinh steps_function_and_meaning.json
+    ├─→ B: OpenAI solver sinh steps_function_and_meaning.json
    ├─→ C: Gen câu hỏi mới, explanation và đáp án
    └─→ D: Sinh đáp án cho câu hỏi mới (dựa vào file JSON từ B và câu hỏi từ C)
 
@@ -32,8 +32,6 @@ load_dotenv()
 # Import modules for Math flow
 # ---------------------------------------------------------------------------
 from generate_question_langchain import generate_new_question, load_sample_question
-from agent import LangGraphMathAgent
-from sat_math_solver import solve_with_steps
 from mathml_parser import MathMLParser
 
 try:
@@ -279,17 +277,14 @@ def run_math_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4.1",
     verbose: bool = True,
-    use_openai_basic_solver: bool = False,
-    use_openai_basic_generator: bool = False,
     open_ai_api_key: Optional[str] = None,
     creative_mode: bool = True,
-    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Chạy luồng đầy đủ theo flow.md.
 
     - A: Lấy question, explanation, correct_answer từ sample.
-    - B: Agent giải bài → sinh file steps_function_and_meaning.json.
+    - B: OpenAI solver giải bài → sinh file steps_function_and_meaning.json.
     - C: Gen câu hỏi mới, explanation và đáp án từ cùng sample.
     - D: Dùng steps JSON + câu hỏi mới → sat_math_solver sinh đáp án cho câu mới.
 
@@ -300,8 +295,6 @@ def run_math_flow(
         api_key: OpenAI API key. None = lấy từ OPENAI_API_KEY.
         model: Tên model cho LLM.
         verbose: In log chi tiết.
-        use_openai_basic_solver: Nếu True, dùng OpenAI basic solver (direct inference, không tool-calling agent).
-        use_openai_basic_generator: Nếu True, dùng OpenAI basic generator (direct JSON inference, không LangChain structured output).
 
     Returns:
         Dict gồm:
@@ -313,35 +306,24 @@ def run_math_flow(
             - generation_artifact_paths: Saved artifact JSON paths.
           - error: Lỗi tổng (nếu có).
     """
-    # Check API keys based on solver choice
-    if use_openai_basic_solver:
-        if not OA_BASIC_AVAILABLE:
-            return {
-                "error": "OpenAI basic solver not available. Check openai_basic_math_solver.py import.",
-                "steps_json_path": None,
-                "new_question_item": None,
-                "new_question_text": None,
-                "answer_result": None,
-            }
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return {
-                "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
-                "steps_json_path": None,
-                "new_question_item": None,
-                "new_question_text": None,
-                "answer_result": None,
-            }
-    else:
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return {
-                "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
-                "steps_json_path": None,
-                "new_question_item": None,
-                "new_question_text": None,
-                "answer_result": None,
-            }
+    # Step B uses OpenAI basic solver.
+    if not OA_BASIC_AVAILABLE:
+        return {
+            "error": "OpenAI basic solver not available. Check openai_basic_math_solver.py import.",
+            "steps_json_path": None,
+            "new_question_item": None,
+            "new_question_text": None,
+            "answer_result": None,
+        }
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {
+            "error": "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.",
+            "steps_json_path": None,
+            "new_question_item": None,
+            "new_question_text": None,
+            "answer_result": None,
+        }
 
     out_dir = Path(out_dir) if out_dir else Path(".")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -374,11 +356,6 @@ def run_math_flow(
             "answer_result": None,
         }
 
-    # question_text = parser.parse(question_html) if question_html else question_html
-    parsed = parser.parse(question_html) if question_html else question_html
-    question_text = parsed['text']
-    # graph = parsed['graph']
-
     result_bag = {
         "steps_json_path": str(steps_path),
         "new_question_item": None,
@@ -391,39 +368,26 @@ def run_math_flow(
         "error": None,
     }
 
-    # --- B: Agent sinh steps_function_and_meaning.json ---
+    # --- B: OpenAI solver sinh steps_function_and_meaning.json ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_openai_basic_solver:
-            solver_name = "OpenAI Basic Solver"
-        else:
-            solver_name = "LangGraph Agent"
+        solver_name = "OpenAI Basic Solver"
         print(f"B: {solver_name} sinh steps_function_and_meaning.json")
         print("=" * 70)
     try:
-        if use_openai_basic_solver:
-            # Use OpenAI direct inference solver (no tool-calling orchestration)
-            agent = OpenAIBasicMathSolver(
-                api_key=api_key,
-                verification_api_key=open_ai_api_key,
-                model=model,
-                verbose=verbose,
-            )
-            trace = agent.solve(
-                question=question_html,
-                mathml_explanation=explanation,
-                correct_answer=correct_answer,
-                steps_json_path=str(steps_path),
-            )
-        else:
-            # Use original OpenAI-based LangGraph agent
-            agent = LangGraphMathAgent(api_key=api_key, model=model, verbose=verbose)
-            trace = agent.solve(
-                question=question_text,
-                mathml_explanation=explanation,
-                correct_answer=correct_answer,
-                steps_json_path=str(steps_path),
-            )
+        # Use OpenAI direct inference solver (no tool-calling orchestration).
+        agent = OpenAIBasicMathSolver(
+            api_key=api_key,
+            verification_api_key=open_ai_api_key,
+            model=model,
+            verbose=verbose,
+        )
+        trace = agent.solve(
+            question=question_html,
+            mathml_explanation=explanation,
+            correct_answer=correct_answer,
+            steps_json_path=str(steps_path),
+        )
         
         if trace.error:
             result_bag["error"] = f"Agent: {trace.error}"
@@ -476,21 +440,17 @@ def run_math_flow(
     # --- C: Gen câu hỏi mới + explanation + đáp án ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_openai_basic_generator:
-            generator_name = "OpenAI Basic Generator"
-        else:
-            generator_name = "OpenAI Generator"
+        generator_name = "OpenAI Basic Generator"
         print(f"C: {generator_name} sinh câu hỏi mới, explanation và đáp án")
         print("=" * 70)
     try:
         new_question_item = generate_new_question(
             sample,
-            use_openai_basic=use_openai_basic_generator,
+            use_openai_basic=True,
             api_key=api_key,
             model=model,
             creative_mode=creative_mode,
             step_b_trace=result_bag.get("step_b_trace"),
-            debug_stage_c=debug_stage_c,
         )
         result_bag["new_question_item"] = new_question_item
         generation_artifacts = new_question_item.get("_generation_artifacts") if isinstance(new_question_item, dict) else None
@@ -540,34 +500,20 @@ def run_math_flow(
     # --- D: Sinh đáp án cho câu hỏi mới (dựa vào steps JSON) ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_openai_basic_solver:
-            solver_name = "OpenAI Basic Solver"
-        else:
-            solver_name = "sat_math_solver"
+        solver_name = "OpenAI Basic Solver"
         print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
         print("=" * 70)
     try:
-        if use_openai_basic_solver:
-            # Use OpenAI direct inference solver
-            answer_result = solve_with_steps_openai_basic(
-                question=new_question_text,
-                steps_path=str(steps_path),
-                new_correct_answer=expected_answer_for_solver,
-                api_key=api_key,
-                model=model,
-                parser=parser,
-                verbose=verbose,
-            )
-        else:
-            # Use original OpenAI-based solver
-            answer_result = solve_with_steps(
-                question=new_question_text,
-                steps_path=str(steps_path),
-                api_key=api_key,
-                model=model,
-                parser=parser,
-                verbose=verbose,
-            )
+        # Use OpenAI direct inference solver.
+        answer_result = solve_with_steps_openai_basic(
+            question=new_question_text,
+            steps_path=str(steps_path),
+            new_correct_answer=expected_answer_for_solver,
+            api_key=api_key,
+            model=model,
+            parser=parser,
+            verbose=verbose,
+        )
         
         result_bag["answer_result"] = answer_result
 
@@ -897,11 +843,8 @@ def run_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     verbose: bool = True,
-    use_openai_basic_solver: bool = False,
-    use_openai_basic_generator: bool = False,
     open_ai_api_key: Optional[str] = None,
     creative_mode: bool = True,
-    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Unified flow that automatically routes to Math or R&W generation based on question type.
@@ -913,8 +856,6 @@ def run_flow(
         api_key: OpenAI API key
         model: LLM model name
         verbose: Print detailed logs
-        use_openai_basic_solver: Use OpenAI direct inference solver instead of LangGraph (Math only)
-        use_openai_basic_generator: Use OpenAI direct JSON inference generator instead of LangChain structured output
         creative_mode: If True, generate new scenarios testing same skill. If False, only change numbers.
     
     Returns:
@@ -946,11 +887,8 @@ def run_flow(
             api_key=api_key,
             model=model,
             verbose=verbose,
-            use_openai_basic_solver=use_openai_basic_solver,
-            use_openai_basic_generator=use_openai_basic_generator,
             open_ai_api_key=open_ai_api_key,
             creative_mode=creative_mode,
-            debug_stage_c=debug_stage_c,
         )
 
 
@@ -967,11 +905,8 @@ def run_flow_batch(
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     verbose: bool = True,
-    use_openai_basic_solver: bool = False,
-    use_openai_basic_generator: bool = False,
     open_ai_api_key: Optional[str] = None,
     creative_mode: bool = True,
-    debug_stage_c: bool = False,
 ):
     """
     Generator that runs run_flow `count` times on the same sample.
@@ -998,11 +933,8 @@ def run_flow_batch(
             api_key=api_key,
             model=model,
             verbose=verbose,
-            use_openai_basic_solver=use_openai_basic_solver,
-            use_openai_basic_generator=use_openai_basic_generator,
             open_ai_api_key=open_ai_api_key,
             creative_mode=creative_mode,
-            debug_stage_c=debug_stage_c,
         )
         yield {"index": i, "total": count, "result": result}
 
@@ -1019,12 +951,8 @@ def main():
     ap.add_argument("--out-dir", type=str, default=None, help="Thư mục ghi kết quả (mặc định: output/)")
     ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (Math questions only)")
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
-    ap.add_argument("--use-openai-basic", action="store_true", help="Bật OpenAI basic mode cho cả solver và generator (direct inference)")
-    ap.add_argument("--use-openai-basic-solver", action="store_true", help="Dùng OpenAI basic solver (direct inference, không LangGraph/tools)")
-    ap.add_argument("--use-openai-basic-generator", action="store_true", help="Dùng OpenAI basic generator (direct JSON inference)")
     ap.add_argument("--open-ai-api-key", type=str, default=None, help="OpenAI API key (hoặc dùng biến môi trường OPENAI_API_KEY)")
     ap.add_argument("--conservative-mode", action="store_true", help="Chỉ thay đổi số liệu, giữ nguyên context (mặc định: tạo scenario mới với cùng skill)")
-    ap.add_argument("--debug-stage-c", action="store_true", help="In raw response text cho Stage C (generator) ra terminal")
     ap.add_argument("--quiet", action="store_true", help="Giảm log")
     ap.add_argument("--save-result", type=str, default=None, help="Lưu kết quả flow ra file JSON")
     ap.add_argument("--count", type=int, default=1, help="Số câu hỏi mới cần tạo trong một lần chạy (mặc định: 1)")
@@ -1040,19 +968,13 @@ def main():
     out_dir = args.out_dir if args.out_dir else "output"
     count = max(1, args.count)
 
-    use_openai_basic_solver = args.use_openai_basic or args.use_openai_basic_solver
-    use_openai_basic_generator = args.use_openai_basic or args.use_openai_basic_generator
-
     batch_kwargs = dict(
         steps_json_path=args.steps_json,
         out_dir=out_dir,
         model=args.model,
         verbose=not args.quiet,
-        use_openai_basic_solver=use_openai_basic_solver,
-        use_openai_basic_generator=use_openai_basic_generator,
         open_ai_api_key=args.open_ai_api_key,
         creative_mode=not args.conservative_mode,
-        debug_stage_c=args.debug_stage_c,
     )
 
     results = []

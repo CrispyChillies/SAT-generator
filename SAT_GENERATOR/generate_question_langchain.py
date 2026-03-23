@@ -2136,7 +2136,6 @@ def generate_new_question(
     model: str = "gpt-4o-mini",
     creative_mode: Optional[bool] = None,
     step_b_trace: Optional[Dict[str, Any]] = None,
-    debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
     """
     Sinh câu hỏi mới, explanation và đáp án từ câu mẫu (cùng category, đúng format, chỉ đổi số liệu).
@@ -2158,6 +2157,7 @@ def generate_new_question(
     """
     # Determine difficulty level and auto-set creative_mode if not specified
     difficulty = sample.get("difficulty", "Easy").lower()
+    debug_stage_c = True
     
     if creative_mode is None:
         # Strategy based on difficulty:
