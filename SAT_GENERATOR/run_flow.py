@@ -35,7 +35,7 @@ from generate_question_langchain import generate_new_question, load_sample_quest
 from mathml_parser import MathMLParser
 
 try:
-    from openai_basic_math_solver import OpenAIBasicMathSolver, solve_with_steps_openai_basic
+    from openai_math_solver import OpenAIBasicMathSolver, solve_with_steps_openai_basic
     OA_BASIC_AVAILABLE = True
 except ImportError:
     OA_BASIC_AVAILABLE = False
