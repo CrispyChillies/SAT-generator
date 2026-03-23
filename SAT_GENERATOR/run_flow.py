@@ -36,17 +36,6 @@ from agent import LangGraphMathAgent
 from sat_math_solver import solve_with_steps
 from mathml_parser import MathMLParser
 
-# Qwen / HuggingFace-compatible solver (uses OpenAI-compatible API)
-QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
-QWEN_BASE_URL = os.getenv("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-QWEN_MODEL    = os.getenv("QWEN_MODEL",    "qwen2.5-32b-instruct")
-
-try:
-    from huggingface_math_solver import HuggingFaceMathSolver, solve_with_steps_hf
-    HF_AVAILABLE = True
-except ImportError:
-    HF_AVAILABLE = False
-
 try:
     from openai_basic_math_solver import OpenAIBasicMathSolver, solve_with_steps_openai_basic
     OA_BASIC_AVAILABLE = True
@@ -290,14 +279,9 @@ def run_math_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4.1",
     verbose: bool = True,
-    use_hf_solver: bool = False,
-    use_hf_generator: bool = False,
     use_openai_basic_solver: bool = False,
     use_openai_basic_generator: bool = False,
-    hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = QWEN_MODEL,
-    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
     debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
@@ -316,13 +300,8 @@ def run_math_flow(
         api_key: OpenAI API key. None = lấy từ OPENAI_API_KEY.
         model: Tên model cho LLM.
         verbose: In log chi tiết.
-        use_hf_solver: Nếu True, dùng HuggingFace solver thay vì OpenAI.
-        use_hf_generator: Nếu True, dùng HuggingFace model cho việc generate câu hỏi mới.
         use_openai_basic_solver: Nếu True, dùng OpenAI basic solver (direct inference, không tool-calling agent).
         use_openai_basic_generator: Nếu True, dùng OpenAI basic generator (direct JSON inference, không LangChain structured output).
-        hf_api_key: HuggingFace API key (nếu dùng HF solver). None = lấy từ HF_API_KEY.
-        hf_generator_model: Tên model HuggingFace cho việc generate câu hỏi (mặc định: GLM-Z1-9B via router).
-        hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
 
     Returns:
         Dict gồm:
@@ -334,44 +313,8 @@ def run_math_flow(
             - generation_artifact_paths: Saved artifact JSON paths.
           - error: Lỗi tổng (nếu có).
     """
-    if use_hf_solver and use_openai_basic_solver:
-        return {
-            "error": "Không thể bật đồng thời use_hf_solver và use_openai_basic_solver.",
-            "steps_json_path": None,
-            "new_question_item": None,
-            "new_question_text": None,
-            "answer_result": None,
-        }
-
-    if use_hf_generator and use_openai_basic_generator:
-        return {
-            "error": "Không thể bật đồng thời use_hf_generator và use_openai_basic_generator.",
-            "steps_json_path": None,
-            "new_question_item": None,
-            "new_question_text": None,
-            "answer_result": None,
-        }
-
     # Check API keys based on solver choice
-    if use_hf_solver:
-        if not HF_AVAILABLE:
-            return {
-                "error": "HuggingFace solver not available. Check huggingface_math_solver.py import.",
-                "steps_json_path": None,
-                "new_question_item": None,
-                "new_question_text": None,
-                "answer_result": None,
-            }
-        hf_api_key = hf_api_key or os.getenv("QWEN_API_KEY") or os.getenv("HF_API_KEY")
-        if not hf_api_key:
-            return {
-                "error": "Cần đặt QWEN_API_KEY (hoặc HF_API_KEY) trong môi trường hoặc truyền hf_api_key.",
-                "steps_json_path": None,
-                "new_question_item": None,
-                "new_question_text": None,
-                "answer_result": None,
-            }
-    elif use_openai_basic_solver:
+    if use_openai_basic_solver:
         if not OA_BASIC_AVAILABLE:
             return {
                 "error": "OpenAI basic solver not available. Check openai_basic_math_solver.py import.",
@@ -451,31 +394,14 @@ def run_math_flow(
     # --- B: Agent sinh steps_function_and_meaning.json ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_hf_solver:
-            solver_name = "HuggingFace Solver"
-        elif use_openai_basic_solver:
+        if use_openai_basic_solver:
             solver_name = "OpenAI Basic Solver"
         else:
             solver_name = "LangGraph Agent"
         print(f"B: {solver_name} sinh steps_function_and_meaning.json")
         print("=" * 70)
     try:
-        if use_hf_solver:
-            # Use Qwen solver (via HuggingFaceMathSolver with Qwen endpoint)
-            agent = HuggingFaceMathSolver(
-                api_key=hf_api_key,
-                openai_api_key=open_ai_api_key,
-                model=QWEN_MODEL,
-                base_url=QWEN_BASE_URL,
-                verbose=verbose
-            )
-            trace = agent.solve(
-                question=question_html,
-                mathml_explanation=explanation,
-                correct_answer=correct_answer,
-                steps_json_path=str(steps_path),
-            )
-        elif use_openai_basic_solver:
+        if use_openai_basic_solver:
             # Use OpenAI direct inference solver (no tool-calling orchestration)
             agent = OpenAIBasicMathSolver(
                 api_key=api_key,
@@ -550,9 +476,7 @@ def run_math_flow(
     # --- C: Gen câu hỏi mới + explanation + đáp án ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_hf_generator:
-            generator_name = "HuggingFace Generator"
-        elif use_openai_basic_generator:
+        if use_openai_basic_generator:
             generator_name = "OpenAI Basic Generator"
         else:
             generator_name = "OpenAI Generator"
@@ -561,11 +485,7 @@ def run_math_flow(
     try:
         new_question_item = generate_new_question(
             sample,
-            use_hf=use_hf_generator,
             use_openai_basic=use_openai_basic_generator,
-            hf_api_key=hf_api_key,
-            hf_model=hf_generator_model,
-            hf_base_url=hf_base_url,
             api_key=api_key,
             model=model,
             creative_mode=creative_mode,
@@ -620,28 +540,14 @@ def run_math_flow(
     # --- D: Sinh đáp án cho câu hỏi mới (dựa vào steps JSON) ---
     if verbose:
         print("\n" + "=" * 70)
-        if use_hf_solver:
-            solver_name = "HuggingFace Solver"
-        elif use_openai_basic_solver:
+        if use_openai_basic_solver:
             solver_name = "OpenAI Basic Solver"
         else:
             solver_name = "sat_math_solver"
         print(f"D: {solver_name} sinh đáp án cho câu hỏi mới")
         print("=" * 70)
     try:
-        if use_hf_solver:
-            # Use Qwen solver (one-shot reasoning via HuggingFace-compatible interface)
-            answer_result = solve_with_steps_hf(
-                question=new_question_text,
-                steps_path=str(steps_path),
-                new_correct_answer=expected_answer_for_solver,
-                api_key=hf_api_key,
-                model=QWEN_MODEL,
-                base_url=QWEN_BASE_URL,
-                parser=parser,
-                verbose=verbose,
-            )
-        elif use_openai_basic_solver:
+        if use_openai_basic_solver:
             # Use OpenAI direct inference solver
             answer_result = solve_with_steps_openai_basic(
                 question=new_question_text,
@@ -991,14 +897,9 @@ def run_flow(
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     verbose: bool = True,
-    use_hf_solver: bool = False,
-    use_hf_generator: bool = False,
     use_openai_basic_solver: bool = False,
     use_openai_basic_generator: bool = False,
-    hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = QWEN_MODEL,
-    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
     debug_stage_c: bool = False,
 ) -> Dict[str, Any]:
@@ -1012,13 +913,8 @@ def run_flow(
         api_key: OpenAI API key
         model: LLM model name
         verbose: Print detailed logs
-        use_hf_solver: Use HuggingFace solver instead of OpenAI (Math only)
-        use_hf_generator: Use HuggingFace model for question generation
         use_openai_basic_solver: Use OpenAI direct inference solver instead of LangGraph (Math only)
         use_openai_basic_generator: Use OpenAI direct JSON inference generator instead of LangChain structured output
-        hf_api_key: HuggingFace API key (if using HF solver or generator)
-        hf_generator_model: HuggingFace model for question generation (default: GLM-Z1-9B via router)
-        hf_base_url: Base URL for HuggingFace API (default: router inference)
         creative_mode: If True, generate new scenarios testing same skill. If False, only change numbers.
     
     Returns:
@@ -1050,14 +946,9 @@ def run_flow(
             api_key=api_key,
             model=model,
             verbose=verbose,
-            use_hf_solver=use_hf_solver,
-            use_hf_generator=use_hf_generator,
             use_openai_basic_solver=use_openai_basic_solver,
             use_openai_basic_generator=use_openai_basic_generator,
-            hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
-            hf_generator_model=hf_generator_model,            
-            hf_base_url=hf_base_url,            
             creative_mode=creative_mode,
             debug_stage_c=debug_stage_c,
         )
@@ -1076,14 +967,9 @@ def run_flow_batch(
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     verbose: bool = True,
-    use_hf_solver: bool = False,
-    use_hf_generator: bool = False,
     use_openai_basic_solver: bool = False,
     use_openai_basic_generator: bool = False,
-    hf_api_key: Optional[str] = None,
     open_ai_api_key: Optional[str] = None,
-    hf_generator_model: str = QWEN_MODEL,
-    hf_base_url: str = QWEN_BASE_URL,
     creative_mode: bool = True,
     debug_stage_c: bool = False,
 ):
@@ -1112,14 +998,9 @@ def run_flow_batch(
             api_key=api_key,
             model=model,
             verbose=verbose,
-            use_hf_solver=use_hf_solver,
-            use_hf_generator=use_hf_generator,
             use_openai_basic_solver=use_openai_basic_solver,
             use_openai_basic_generator=use_openai_basic_generator,
-            hf_api_key=hf_api_key,
             open_ai_api_key=open_ai_api_key,
-            hf_generator_model=hf_generator_model,
-            hf_base_url=hf_base_url,
             creative_mode=creative_mode,
             debug_stage_c=debug_stage_c,
         )
@@ -1138,13 +1019,9 @@ def main():
     ap.add_argument("--out-dir", type=str, default=None, help="Thư mục ghi kết quả (mặc định: output/)")
     ap.add_argument("--steps-json", type=str, default="steps_function_and_meaning.json", help="Tên file steps JSON (Math questions only)")
     ap.add_argument("--model", type=str, default="gpt-4o-mini", help="Model LLM")
-    ap.add_argument("--use-hf", action="store_true", help="Dùng HuggingFace solver thay vì OpenAI (chỉ cho Math questions)")
-    ap.add_argument("--use-hf-generator", action="store_true", help="Dùng HuggingFace model cho việc generate câu hỏi mới (cả Math và R&W)")
     ap.add_argument("--use-openai-basic", action="store_true", help="Bật OpenAI basic mode cho cả solver và generator (direct inference)")
     ap.add_argument("--use-openai-basic-solver", action="store_true", help="Dùng OpenAI basic solver (direct inference, không LangGraph/tools)")
     ap.add_argument("--use-openai-basic-generator", action="store_true", help="Dùng OpenAI basic generator (direct JSON inference)")
-    ap.add_argument("--hf-generator-model", type=str, default="zai-org/GLM-Z1-9B-0414:featherless-ai", help="Tên model HuggingFace cho việc generate câu hỏi")
-    ap.add_argument("--hf-api-key", type=str, default=None, help="HuggingFace API key (hoặc dùng biến môi trường HF_API_KEY)")
     ap.add_argument("--open-ai-api-key", type=str, default=None, help="OpenAI API key (hoặc dùng biến môi trường OPENAI_API_KEY)")
     ap.add_argument("--conservative-mode", action="store_true", help="Chỉ thay đổi số liệu, giữ nguyên context (mặc định: tạo scenario mới với cùng skill)")
     ap.add_argument("--debug-stage-c", action="store_true", help="In raw response text cho Stage C (generator) ra terminal")
@@ -1166,25 +1043,14 @@ def main():
     use_openai_basic_solver = args.use_openai_basic or args.use_openai_basic_solver
     use_openai_basic_generator = args.use_openai_basic or args.use_openai_basic_generator
 
-    if args.use_hf and use_openai_basic_solver:
-        print("Error: Không thể bật đồng thời --use-hf và --use-openai-basic-solver")
-        return 1
-    if args.use_hf_generator and use_openai_basic_generator:
-        print("Error: Không thể bật đồng thời --use-hf-generator và --use-openai-basic-generator")
-        return 1
-
     batch_kwargs = dict(
         steps_json_path=args.steps_json,
         out_dir=out_dir,
         model=args.model,
         verbose=not args.quiet,
-        use_hf_solver=args.use_hf,
-        use_hf_generator=args.use_hf_generator,
         use_openai_basic_solver=use_openai_basic_solver,
         use_openai_basic_generator=use_openai_basic_generator,
-        hf_api_key=args.hf_api_key,
         open_ai_api_key=args.open_ai_api_key,
-        hf_generator_model=args.hf_generator_model,
         creative_mode=not args.conservative_mode,
         debug_stage_c=args.debug_stage_c,
     )

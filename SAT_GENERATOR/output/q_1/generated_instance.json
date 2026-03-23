@@ -1,20 +1,25 @@
 {
-  "question": "What is the smallest positive perfect cube that can be written as the sum of five consecutive integers?",
-  "explanation": "Sum of five consecutive integers can be written as <math><mo>(</mo><mi>k</mi><mo>&#x2212;</mo><mn>2</mn><mo>)</mo><mo>+</mo><mo>(</mo><mi>k</mi><mo>&#x2212;</mo><mn>1</mn><mo>)</mo><mo>+</mo><mi>k</mi><mo>+</mo><mo>(</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>(</mo><mi>k</mi><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>5</mn><mi>k</mi></math>, so the sum must be a multiple of 5. If <math><msup><mi>m</mi><mn>3</mn></msup></math> equals this sum, then 5 divides <math><msup><mi>m</mi><mn>3</mn></msup></math>, hence 5 divides <math><mi>m</mi></math>. Write <math><mi>m</mi>=<mn>5</mn><mi>t</mi></math>, so <math><msup><mi>m</mi><mn>3</mn></msup>=<mn>125</mn><msup><mi>t</mi><mn>3</mn></msup></math>. The smallest positive choice is <math><mn>125</mn></math> (take <math><mi>t</mi>=<mn>1</mn></math>). This gives <math><mi>k</mi>=125/5=<mn>25</mn></math>, and the five integers are <math><mn>23</mn></math>, <math><mn>24</mn></math>, <math><mn>25</mn></math>, <math><mn>26</mn></math>, <math><mn>27</mn></math>, whose sum is <math><mn>125</mn></math>.",
+  "question": "How many distinct values can be obtained from <math><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>+</mo><mn>2</mn></math> by inserting parentheses (no rearranging of factors)?",
+  "explanation": "There are five full parenthesizations of the four operands 3, 4, 6, 2 (with operators ·, ·, +). Evaluate each grouping: <math><mo>(</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>)</mo><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>74</mn></math>, <math><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>)</mo><mo>+</mo><mn>2</mn><mo>=</mo><mn>74</mn></math>, <math><mo>(</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>)</mo><mo>&#x22C5;</mo><mo>(</mo><mn>6</mn><mo>+</mo><mn>2</mn><mo>)</mo><mo>)</mo><mo>=</mo><mn>96</mn></math>, <math><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>6</mn><mo>)</mo><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>78</mn></math>, and <math><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mo>(</mo><mn>6</mn><mo>+</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>96</mn></math>. The distinct values that appear are 74, 78, and 96, so there are 3 distinct results.",
   "choices": [
-    "<math><mn>27</mn></math>",
-    "<math><mn>64</mn></math>",
-    "<math><mn>125</mn></math>",
-    "<math><mn>216</mn></math>"
+    "<math><mn>2</mn></math>",
+    "<math><mn>3</mn></math>",
+    "<math><mn>4</mn></math>",
+    "<math><mn>5</mn></math>"
   ],
-  "correct_answer_letter": "C",
-  "correct_answer": "<math><mn>125</mn></math>",
+  "correct_answer_letter": "B",
+  "correct_answer": "<math><mn>3</mn></math>",
   "parameter_values": {
-    "length_of_sequence": 5,
-    "power_degree": 3,
-    "step_size_between_terms": 1,
-    "sign_constraint": "positive",
-    "allow_zero_or_not": false
+    "number_of_multiplicative_factors": 3,
+    "values_of_factors_in_order": [
+      3,
+      4,
+      6
+    ],
+    "additive_term_value_k": 2,
+    "position_of_additive_term": "attached to last operand (as '+k' after last factor)",
+    "allow_degenerate_factors_flag": false,
+    "number_of_additive_terms": 1
   },
-  "derivation_summary": "Sum = 5k; any cube equal to the sum must be divisible by 5, so its base is divisible by 5. Smallest base 5 gives 5^3 = 125, with k = 25 and consecutive integers 23–27."
+  "derivation_summary": "Enumerate the five full parenthesizations of 3 · 4 · 6 + 2, evaluate each grouping, and collect distinct numeric results: evaluations yield 74, 74, 96, 78, 96, giving three distinct values."
 }

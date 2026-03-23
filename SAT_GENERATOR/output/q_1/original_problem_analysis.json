@@ -1,64 +1,67 @@
 {
   "source_fields": {
     "section": "Algebra",
-    "category": "Sequences and Series",
-    "difficulty": "Medium",
+    "category": "Polynomial Functions and Operations",
+    "difficulty": "Hard",
     "type": "multiple-choice",
     "skill": "",
-    "question_text": "What is the smallest positive perfect cube that can be written as the sum of three consecutive integers?",
+    "question_text": "How many distinct values can be obtained from <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn></math> by inserting parentheses (no rearranging of factors)?",
     "choices": [
-      "<math><mn>8</mn></math>",
-      "<math><mn>27</mn></math>",
-      "<math><mn>64</mn></math>",
-      "<math><mn>125</mn></math>"
+      "<math><mn>3</mn></math>",
+      "<math><mn>4</mn></math>",
+      "<math><mn>5</mn></math>",
+      "<math><mn>6</mn></math>"
     ],
     "correct_answer": [
       "B"
     ],
-    "explanation": "Sum of three consecutive integers is <math><mo>(</mo><mi>k</mi><mo>&#x2212;</mo><mn>1</mn><mo>)</mo><mo>+</mo><mi>k</mi><mo>+</mo><mo>(</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>3</mn><mi>k</mi></math>, a multiple of 3. The least cube multiple of 3 is <math><msup><mn>3</mn><mn>3</mn></msup><mo>=</mo><mn>27</mn></math>."
+    "explanation": "Only the placement of the <math><mo>+</mo><mn>1</mn></math> changes the value. The four possibilities are <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mo>(</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>144</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mo>(</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>126</mn></math>, <math><mn>2</mn><mo>&#x22C5;</mo><mo>(</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>122</mn></math>, and <math><mo>(</mo><mn>2</mn><mo>&#x22C5;</mo><mn>3</mn><mo>&#x22C5;</mo><mn>4</mn><mo>&#x22C5;</mo><mn>5</mn><mo>)</mo><mo>+</mo><mn>1</mn><mo>=</mo><mn>121</mn></math>."
   },
   "derived_fields": {
-    "skill": "Number theory / Sequences",
-    "sub_skill": "Sums of consecutive integers and divisibility constraints",
-    "problem_family": "Representation of integers as sums of consecutive integers; constraints from divisibility and perfect powers",
+    "skill": "Order of operations / Parenthesization effects",
+    "sub_skill": "Counting distinct evaluation results under different parenthesizations; associativity awareness",
+    "problem_family": "Parentheses placement and evaluation-order effects on mixed operations (multiplication and addition); counting distinct numeric outcomes from different binary tree parenthesizations",
     "solve_strategy": [
-      "Model the three consecutive integers as (k-1), k, (k+1) and simplify the sum algebraically.",
-      "Use divisibility reasoning: show the sum equals 3k, so it must be divisible by 3.",
-      "Set the perfect power equal to the divisibility expression (3k = m^3) and deduce factor constraints on m.",
-      "Parameterize m by the necessary factor (m = 3t) and solve for the minimal positive integer parameter t to get the smallest cube.",
-      "Verify by constructing the actual consecutive integers corresponding to the found k and checking positivity."
+      "Enumerate all structurally different full parenthesizations (binary trees) consistent with the given operand order that can change where the +1 is applied.",
+      "Identify which parenthesizations actually change the numerical effect of the +1 (i.e., whether +1 is inside some product factor or applied after all multiplications).",
+      "Evaluate each distinct relevant parenthesization numerically and collect distinct results.",
+      "Count distinct outcomes and map to appropriate answer choice."
     ],
-    "reasoning_pattern": "Algebraic modeling followed by divisibility factorization and minimality argument",
+    "reasoning_pattern": "Case analysis over possible parenthesizations combined with application of associativity of multiplication and non-distributivity of addition over multiplication (so placing +1 inside a product changes the result).",
     "logic_invariants": [
-      "Sum of three consecutive integers equals 3k for some integer k.",
-      "If an integer m^3 is divisible by a prime p, then m is divisible by p (prime power divisibility).",
-      "Minimal positive solution corresponds to taking the smallest positive integer value for a free integer parameter introduced during parameterization."
+      "Multiplication is associative: grouping of pure products without addition does not change the product value.",
+      "Addition is not distributively equivalent to arbitrary regroupings: (a·b)+1 generally differs from a·(b+1).",
+      "Operands' order (sequence of factors) is fixed; only grouping (parentheses) may change evaluation order.",
+      "Distinct parenthesizations may lead to equal numeric results in special cases (e.g., zeros or ones), but with given operands they can be distinct."
     ],
     "changeable_parameters": [
-      "length_of_sequence (number of consecutive integers; here 3)",
-      "power_degree (e.g., square, cube, fourth power)",
-      "sign_constraint (positive only vs. allow negative)",
-      "step_size_between_terms (default 1; could be 2 for consecutive odd/even integers)",
-      "allow_zero_or_not (whether zero can appear among the consecutive integers)"
+      "Number of multiplicative factors before the +1 (length of factor chain).",
+      "Values of the multiplicative factors (positive integers, could include 0 or 1).",
+      "Position of the +1 relative to the chain (always at the end in this template, but could be inserted after other factors).",
+      "Type of operator used in the chain (e.g., multiplication, exponentiation) and position of the additive term.",
+      "Whether multiple additions are present instead of a single +1."
     ],
     "parameter_constraints": [
-      "k must be an integer; for positive sums require appropriate lower bound on k so all listed integers are positive if positivity is required",
-      "m (the base of the perfect power) must be an integer; when prime p divides m^d, m must be divisible by p",
-      "length_of_sequence >= 2 (sequence of consecutive integers must have at least two terms)",
-      "power_degree is an integer >= 2",
-      "step_size_between_terms is a positive integer"
+      "Operands' sequence must remain fixed (no reordering allowed).",
+      "Parentheses may be inserted only to change evaluation order; binary operation semantics apply.",
+      "For the typical problem flavor, factors are positive integers >1 to avoid degenerate equalities caused by 0 or 1.",
+      "Exactly one additive term (like +1) is present to keep the counting tractable unless intentionally varied."
     ],
-    "answer_format": "option letter (multiple-choice) and integer value (perfect cube). Example: 'B (27)'. The core numeric answer format is integer (perfect cube).",
+    "answer_format": "integer (count of distinct numeric values); for multiple-choice instances: option letter corresponding to that count",
     "rendering_notes": [
-      "Preserve MathML tags in choices and explanation exactly as given when rendering.",
-      "When presenting algebraic steps, use simple inline math or MathML consistent with the original formatting."
+      "Preserve original <math>...</math> MathML tags exactly in question text and choices.",
+      "When generating new variants, use MathML for inline numeric expressions to match source format.",
+      "Ensure parentheses are rendered clearly (use explicit parentheses in MathML when describing grouping)."
     ],
     "risk_flags": [
-      "Students may confuse 'multiple of 3' with 'multiple that is a perfect cube' and choose 3 instead of 27.",
-      "Altering sequence length or parity can change divisibility patterns; naive generalization may produce incorrect minimal values.",
-      "Allowing nonpositive integers without explicit instruction can produce smaller (negative or zero) perfect powers; must state positivity constraint if intended."
+      "Counting all Catalan-number parenthesizations instead of only those that change the location of the addition (overcount).",
+      "Assuming associativity of addition across multiplication (i.e., thinking grouping can't change value) — leads to undercounting.",
+      "Including degenerate parameter choices like 0 or 1 that collapse multiple parenthesizations to the same numeric result, changing answer key.",
+      "Misreading 'no rearranging of factors' and allowing commutativity to produce new orders."
     ]
   },
-  "missing_source_fields": [],
-  "confidence": 0.82
+  "missing_source_fields": [
+    "skill"
+  ],
+  "confidence": 0.86
 }

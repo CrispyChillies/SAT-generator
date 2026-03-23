@@ -17,7 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from generate_question_langchain import load_sample_question
-from run_flow import run_flow, run_flow_batch, preprocess_correct_answer, QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL
+from run_flow import run_flow, run_flow_batch, preprocess_correct_answer
 
 app = Flask(__name__)
 QUESTIONS_PATH = os.getenv("QUESTIONS_PATH", "questions_practice_test.json")
@@ -83,9 +83,6 @@ def _to_bool(value: Any, default: bool = False) -> bool:
 
 def _extract_flow_mode(data: Dict[str, Any]) -> Dict[str, Any]:
     """Extract solver/generator mode toggles from API payload."""
-    use_hf_solver = _to_bool(data.get("use_hf_solver"), False)
-    use_hf_generator = _to_bool(data.get("use_hf_generator"), False)
-
     use_openai_basic = _to_bool(data.get("use_openai_basic"), False)
     use_openai_basic_solver = use_openai_basic or _to_bool(data.get("use_openai_basic_solver"), False)
     use_openai_basic_generator = use_openai_basic or _to_bool(data.get("use_openai_basic_generator"), False)
@@ -94,8 +91,6 @@ def _extract_flow_mode(data: Dict[str, Any]) -> Dict[str, Any]:
     creative_mode = _to_bool(data.get("creative_mode"), False)
 
     return {
-        "use_hf_solver": use_hf_solver,
-        "use_hf_generator": use_hf_generator,
         "use_openai_basic_solver": use_openai_basic_solver,
         "use_openai_basic_generator": use_openai_basic_generator,
         "model": model,
@@ -173,14 +168,9 @@ def api_run_flow():
         out_dir=str(BASE_DIR),
         steps_json_path="steps_function_and_meaning.json",
         verbose=True,
-        use_hf_solver=mode_cfg["use_hf_solver"],
-        use_hf_generator=mode_cfg["use_hf_generator"],
         use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
         use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
         model=mode_cfg["model"],
-        hf_api_key=QWEN_API_KEY,
-        hf_generator_model=QWEN_MODEL,
-        hf_base_url=QWEN_BASE_URL,
         creative_mode=mode_cfg["creative_mode"],
     )
 
@@ -331,14 +321,9 @@ def api_run_flow_batch():
             out_dir=str(BASE_DIR / "output"),
             steps_json_path="steps_function_and_meaning.json",
             verbose=True,
-            use_hf_solver=mode_cfg["use_hf_solver"],
-            use_hf_generator=mode_cfg["use_hf_generator"],
             use_openai_basic_solver=mode_cfg["use_openai_basic_solver"],
             use_openai_basic_generator=mode_cfg["use_openai_basic_generator"],
             model=mode_cfg["model"],
-            hf_api_key=QWEN_API_KEY,
-            hf_generator_model=QWEN_MODEL,
-            hf_base_url=QWEN_BASE_URL,
             creative_mode=mode_cfg["creative_mode"],
             debug_stage_c=True
         ):

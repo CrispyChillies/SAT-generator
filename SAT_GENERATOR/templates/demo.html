@@ -417,14 +417,6 @@
         <input type="checkbox" id="toggleOpenAIBasicGenerator" />
         <span>OpenAI basic generator</span>
       </label>
-      <label class="switch-item" title="Bật HuggingFace solver">
-        <input type="checkbox" id="toggleHFSolver" />
-        <span>HF solver</span>
-      </label>
-      <label class="switch-item" title="Bật HuggingFace generator">
-        <input type="checkbox" id="toggleHFGenerator" />
-        <span>HF generator</span>
-      </label>
       <label class="switch-item" title="Creative mode (tạo scenario mới)">
         <input type="checkbox" id="toggleCreativeMode" />
         <span>Creative mode</span>
@@ -465,8 +457,6 @@
     const toggleOpenAIBasic = document.getElementById("toggleOpenAIBasic");
     const toggleOpenAIBasicSolver = document.getElementById("toggleOpenAIBasicSolver");
     const toggleOpenAIBasicGenerator = document.getElementById("toggleOpenAIBasicGenerator");
-    const toggleHFSolver = document.getElementById("toggleHFSolver");
-    const toggleHFGenerator = document.getElementById("toggleHFGenerator");
     const toggleCreativeMode = document.getElementById("toggleCreativeMode");
 
     // Progress
@@ -498,8 +488,6 @@
         use_openai_basic: !!toggleOpenAIBasic.checked,
         use_openai_basic_solver: !!toggleOpenAIBasicSolver.checked,
         use_openai_basic_generator: !!toggleOpenAIBasicGenerator.checked,
-        use_hf_solver: !!toggleHFSolver.checked,
-        use_hf_generator: !!toggleHFGenerator.checked,
         creative_mode: !!toggleCreativeMode.checked,
       };
     }
@@ -509,8 +497,6 @@
       const tags = [];
       if (mode.use_openai_basic_solver) tags.push("oa-basic-solver");
       if (mode.use_openai_basic_generator) tags.push("oa-basic-generator");
-      if (mode.use_hf_solver) tags.push("hf-solver");
-      if (mode.use_hf_generator) tags.push("hf-generator");
       if (mode.creative_mode) tags.push("creative");
       if (!tags.length) tags.push("default");
       if (mode.model) tags.push(mode.model);

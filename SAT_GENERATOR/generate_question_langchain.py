@@ -1461,77 +1461,9 @@ def _get_correct_answer_letter(sample: Dict[str, Any]) -> Optional[str]:
     return letter if letter in ("A", "B", "C", "D") else None
 
 
-def _clean_reasoning_response(response_text: Union[str, List]) -> str:
-    """
-    Clean response from reasoning models that output <think>...</think> tags.
-    
-    Args:
-        response_text: Raw response from LLM that may contain thinking tags and code blocks
-    
-    Returns:
-        Clean text with thinking tags removed
-    """
-    # Ensure we have a string (handle LangChain AIMessage.content which might be typed as Union[str, List])
-    if not isinstance(response_text, str):
-        response_text = str(response_text)
-    
-    # Remove <think>...</think> tags and their content
-    cleaned = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL | re.IGNORECASE)
-    
-    return cleaned.strip()
-
-
-def _format_with_gpt4o(
-    reasoning_output: str,
-    output_schema: type[BaseModel],
-    api_key: Optional[str] = None,
-) -> Any:
-    """
-    Use GPT-4o to format reasoning LLM output into strict JSON structure.
-    
-    Args:
-        reasoning_output: Free-form output from reasoning LLM
-        output_schema: Pydantic model class defining the expected output structure
-        api_key: OpenAI API key
-    
-    Returns:
-        Structured output matching the schema
-    """
-    openai_key = api_key or os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise ValueError("Need OPENAI_API_KEY for formatting")
-    
-    formatter_llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0.0,
-        api_key=openai_key,  # type: ignore
-    )
-    
-    # Get schema description for the prompt
-    schema_json = output_schema.model_json_schema()
-    schema_description = json.dumps(schema_json, indent=2)
-    
-    prompt = f"""You are a JSON formatter. Your task is to extract information from the reasoning LLM output and structure it into valid JSON matching the required schema.
-
-IMPORTANT:
-- Extract ALL information from the reasoning output
-- Preserve ALL HTML and MathML tags EXACTLY as they appear
-- Do NOT modify any content, only structure it into JSON
-- Ensure output is valid JSON matching the schema
-
-Required JSON Schema:
-{schema_description}
-
-Reasoning LLM Output:
----
-{reasoning_output}
----
-
-Return ONLY the JSON object. Do NOT include any explanation or markdown code blocks."""
-    
-    structured_llm = formatter_llm.with_structured_output(output_schema)
-    result = structured_llm.invoke([HumanMessage(content=prompt)])
-    return result  # type: ignore
+def _supports_custom_temperature(model_name: str) -> bool:
+    """Some models (for example GPT-5 family) only support default temperature."""
+    return "gpt-5" not in (model_name or "").lower()
 
 
 def _extract_json_object(text: str) -> Dict[str, Any]:
@@ -1563,9 +1495,6 @@ def _invoke_openai_basic_structured(
     debug_stage_c: bool = False,
 ) -> Any:
     """Direct OpenAI inference with strict system prompt and Pydantic validation."""
-
-    def _supports_custom_temperature(model_name: str) -> bool:
-        return "gpt-5" not in (model_name or "").lower()
 
     required_fields = set(output_schema.model_json_schema().get("required", []))
     model_field_names = set(output_schema.model_fields.keys())
@@ -2202,11 +2131,7 @@ Return ONLY the JSON object.
 def generate_new_question(
     sample: Dict[str, Any],
     llm: Optional[ChatOpenAI] = None,
-    use_hf: bool = False,
     use_openai_basic: bool = False,
-    hf_api_key: Optional[str] = None,
-    hf_model: str = "zai-org/GLM-Z1-9B-0414:featherless-ai",
-    hf_base_url: str = "https://router.huggingface.co/v1",
     api_key: Optional[str] = None,
     model: str = "gpt-4o-mini",
     creative_mode: Optional[bool] = None,
@@ -2219,11 +2144,7 @@ def generate_new_question(
     Args:
         sample: Một item từ questions_practice_test.json (có id, category, question, explanation, correct_answer, ...).
         llm: LangChain ChatOpenAI. Nếu None sẽ tạo mới từ API keys.
-        use_hf: Nếu True, dùng HuggingFace model thay vì OpenAI.
         use_openai_basic: Nếu True, dùng OpenAI chat-completions trực tiếp với system prompt JSON (không LangChain structured output).
-        hf_api_key: HuggingFace API key (hoặc dùng HF_API_KEY env var).
-        hf_model: Tên model HuggingFace (mặc định: GLM-Z1-9B via router inference).
-        hf_base_url: Base URL cho HuggingFace API (mặc định: router.huggingface.co for router inference).
         api_key: OpenAI API key (hoặc dùng OPENAI_API_KEY env var).
         model: Tên model OpenAI (mặc định: gpt-4o-mini).
         creative_mode: Nếu None (mặc định), tự động chọn dựa trên difficulty:
@@ -2251,41 +2172,27 @@ def generate_new_question(
     else:
         mode_text = "creative" if creative_mode else "conservative"
         print(f"📙 Difficulty: {difficulty.upper()} → Strategy: {mode_text.upper()} (manually set)")
-    if use_hf and use_openai_basic:
-        raise ValueError("Không thể bật đồng thời use_hf và use_openai_basic.")
 
     openai_key = api_key or os.getenv("OPENAI_API_KEY")
+    generation_temp = 0.7 if creative_mode else 0.3
 
     if use_openai_basic and not openai_key:
         raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
 
     if llm is None and not use_openai_basic:
-        if use_hf:
-            # Use HuggingFace model via OpenAI-compatible API
-            hf_key = hf_api_key or os.getenv("HF_API_KEY")
-            if not hf_key:
-                raise ValueError("Cần đặt HF_API_KEY trong môi trường hoặc truyền hf_api_key.")
-            
-            llm = ChatOpenAI(
-                model=hf_model,
-                temperature=0.7 if creative_mode else 0.3,
-                api_key=hf_key,  # type: ignore
-                base_url=hf_base_url,
-            )
-            mode_text = "creative" if creative_mode else "conservative"
-            print(f"✓ Using HuggingFace model: {hf_model} ({mode_text} mode)")
-        else:
-            # Use OpenAI model
-            if not openai_key:
-                raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
-            
-            llm = ChatOpenAI(
-                model=model,
-                temperature=0.7 if creative_mode else 0.3,
-                api_key=openai_key,  # type: ignore
-            )
-            mode_text = "creative" if creative_mode else "conservative"
-            print(f"✓ Using OpenAI model: {model} ({mode_text} mode)")
+        # Use OpenAI model
+        if not openai_key:
+            raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
+
+        llm_kwargs: Dict[str, Any] = {
+            "model": model,
+            "api_key": openai_key,
+        }
+        if _supports_custom_temperature(model):
+            llm_kwargs["temperature"] = generation_temp
+        llm = ChatOpenAI(**llm_kwargs)  # type: ignore[arg-type]
+        mode_text = "creative" if creative_mode else "conservative"
+        print(f"✓ Using OpenAI model: {model} ({mode_text} mode)")
     elif use_openai_basic:
         mode_text = "creative" if creative_mode else "conservative"
         print(f"✓ Using OpenAI basic inference: {model} ({mode_text} mode)")
@@ -2313,7 +2220,7 @@ def generate_new_question(
     # Structured OpenAI pipeline for non-graph math questions.
     # If structured generation fails, fall back to the legacy branch below.
     structured_artifacts: Optional[Dict[str, Any]] = None
-    if not use_hf and generate_full:
+    if generate_full:
         structured_item, structured_artifacts = _try_generate_structured_openai(
             sample=sample,
             llm=llm,
@@ -2379,37 +2286,7 @@ def generate_new_question(
                 difficulty,
             )
             
-            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
-            if use_hf:
-                if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
-                # Step 1: Get free-form output from reasoning LLM
-                freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
-                    question_text_no_svg,
-                    original_explanation,
-                    original_choices,
-                    correct_letter,
-                    graph_spec_dict,
-                    category,
-                    section,
-                    difficulty,
-                )
-                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
-                print("\n=== Reasoning LLM Output ===")
-                print(raw_response.content[:500], "...")
-                
-                # Step 2: Clean reasoning output (remove <think> tags)
-                cleaned_output = _clean_reasoning_response(raw_response.content)
-                
-                # Step 3: Format with GPT-4o into structured JSON
-                print("\n=== Formatting with GPT-4o ===")
-                result_graph = _format_with_gpt4o(
-                    cleaned_output,
-                    GeneratedGraphQuestionContent,
-                    api_key=api_key,
-                )
-                print("✓ Successfully formatted into JSON")
-            elif use_openai_basic:
+            if use_openai_basic:
                 freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
                     question_text_no_svg,
                     original_explanation,
@@ -2425,7 +2302,7 @@ def generate_new_question(
                     output_schema=GeneratedGraphQuestionContent,
                     api_key=openai_key or "",
                     model=model,
-                    temperature=0.7 if creative_mode else 0.3,
+                    temperature=generation_temp,
                     debug_stage_c=debug_stage_c,
                 )
             else:
@@ -2547,37 +2424,8 @@ def generate_new_question(
                 section,
                 difficulty,
                 creative_mode=creative_mode,
-            )            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
-            if use_hf:
-                if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
-                # Step 1: Get free-form output from reasoning LLM
-                freeform_prompt = _build_prompt_multiple_choice_freeform(
-                    original_html,
-                    original_explanation,
-                    original_choices,
-                    correct_letter,
-                    category,
-                    section,
-                    difficulty,
-                    creative_mode=creative_mode,
-                )
-                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
-                print("\n=== Reasoning LLM Output ===")
-                print(raw_response.content[:500], "...")
-                
-                # Step 2: Clean reasoning output
-                cleaned_output = _clean_reasoning_response(raw_response.content)
-                
-                # Step 3: Format with GPT-4o
-                print("\n=== Formatting with GPT-4o ===")
-                result_mc = _format_with_gpt4o(
-                    cleaned_output,
-                    GeneratedMultipleChoiceContent,
-                    api_key=api_key,
-                )
-                print("✓ Successfully formatted into JSON")
-            elif use_openai_basic:
+            )
+            if use_openai_basic:
                 freeform_prompt = _build_prompt_multiple_choice_freeform(
                     original_html,
                     original_explanation,
@@ -2593,7 +2441,7 @@ def generate_new_question(
                     output_schema=GeneratedMultipleChoiceContent,
                     api_key=openai_key or "",
                     model=model,
-                    temperature=0.7 if creative_mode else 0.3,
+                    temperature=generation_temp,
                     debug_stage_c=debug_stage_c,
                 )
             else:
@@ -2657,36 +2505,7 @@ def generate_new_question(
                 difficulty,
             )
             
-            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
-            if use_hf:
-                if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
-                # Step 1: Get free-form output from reasoning LLM
-                freeform_prompt = _build_prompt_graph_free_response_freeform(
-                    question_text_no_svg,
-                    original_explanation,
-                    original_correct_answer,
-                    graph_spec_dict,
-                    category,
-                    section,
-                    difficulty,
-                )
-                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
-                print("\n=== Reasoning LLM Output ===")
-                print(raw_response.content[:500], "...")
-                
-                # Step 2: Clean reasoning output
-                cleaned_output = _clean_reasoning_response(raw_response.content)
-                
-                # Step 3: Format with GPT-4o
-                print("\n=== Formatting with GPT-4o ===")
-                result_free_response = _format_with_gpt4o(
-                    cleaned_output,
-                    GeneratedGraphFreeResponseContent,
-                    api_key=api_key,
-                )
-                print("✓ Successfully formatted into JSON")
-            elif use_openai_basic:
+            if use_openai_basic:
                 freeform_prompt = _build_prompt_graph_free_response_freeform(
                     question_text_no_svg,
                     original_explanation,
@@ -2701,7 +2520,7 @@ def generate_new_question(
                     output_schema=GeneratedGraphFreeResponseContent,
                     api_key=openai_key or "",
                     model=model,
-                    temperature=0.7 if creative_mode else 0.3,
+                    temperature=generation_temp,
                     debug_stage_c=debug_stage_c,
                 )
             else:
@@ -2786,37 +2605,7 @@ def generate_new_question(
                 difficulty,
                 creative_mode=creative_mode,
             )
-            # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
-            if use_hf:
-                if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
-                # Step 1: Get free-form output from reasoning LLM
-                freeform_prompt = _build_prompt_freeform(
-                    original_html,
-                    original_explanation,
-                    original_correct_answer,
-                    category,
-                    section,
-                    q_type,
-                    difficulty,
-                    creative_mode=creative_mode,
-                )
-                raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
-                print("\n=== Reasoning LLM Output ===")
-                print(raw_response.content[:500], "...")
-                
-                # Step 2: Clean reasoning output
-                cleaned_output = _clean_reasoning_response(raw_response.content)
-                
-                # Step 3: Format with GPT-4o
-                print("\n=== Formatting with GPT-4o ===")
-                result = _format_with_gpt4o(
-                    cleaned_output,
-                    GeneratedQuestionContent,
-                    api_key=api_key,
-                )
-                print("✓ Successfully formatted into JSON")
-            elif use_openai_basic:
+            if use_openai_basic:
                 freeform_prompt = _build_prompt_freeform(
                     original_html,
                     original_explanation,
@@ -2832,7 +2621,7 @@ def generate_new_question(
                     output_schema=GeneratedQuestionContent,
                     api_key=openai_key or "",
                     model=model,
-                    temperature=0.7 if creative_mode else 0.3,
+                    temperature=generation_temp,
                     debug_stage_c=debug_stage_c,
                 )
             else:
@@ -2862,38 +2651,8 @@ def generate_new_question(
         # Chỉ có question mẫu, không có explanation/correct_answer → chỉ sinh câu hỏi (tương thích cũ)
         class QuestionOnly(BaseModel):
             question: str = Field(description="New question content with proper HTML+MathML")
-        
-        # For HuggingFace models, use two-step process: reasoning LLM + GPT-4o formatting
-        if use_hf:
-            if llm is None:
-                raise ValueError("LLM chưa được khởi tạo cho use_hf mode")
-            # Step 1: Free-form prompt for reasoning LLM
-            freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
 
-Sample question:
-{original_html}
-
-Generate your response in this format:
-
-QUESTION:
-[Question with only numbers changed, preserving all HTML and MathML structure]
-"""
-            
-            raw_response = llm.invoke([HumanMessage(content=freeform_prompt)])
-            print("\n=== Reasoning LLM Output ===")
-            print(raw_response.content[:500], "...")
-            
-            # Step 2: Clean and format
-            cleaned_output = _clean_reasoning_response(raw_response.content)
-            
-            print("\n=== Formatting with GPT-4o ===")
-            res = _format_with_gpt4o(
-                cleaned_output,
-                QuestionOnly,
-                api_key=api_key,
-            )
-            print("✓ Successfully formatted into JSON")
-        elif use_openai_basic:
+        if use_openai_basic:
             freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
 
 Sample question:
@@ -2909,7 +2668,7 @@ QUESTION:
                 output_schema=QuestionOnly,
                 api_key=openai_key or "",
                 model=model,
-                temperature=0.7 if creative_mode else 0.3,
+                temperature=generation_temp,
                 debug_stage_c=debug_stage_c,
             )
         else:
