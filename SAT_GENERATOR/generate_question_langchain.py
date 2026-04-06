@@ -10,13 +10,11 @@ import os
 import json
 import re
 import uuid
-import io
+import base64
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
-
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for server
-import matplotlib.pyplot as plt
+from typing import Any, Dict, List, Literal, Optional
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
@@ -39,19 +37,37 @@ from mathml_parser import MathMLParser
 # Cấu trúc output từ LLM: câu hỏi + explanation + đáp án
 # ---------------------------------------------------------------------------
 
+
 class GeneratedQuestionContent(BaseModel):
     """Câu hỏi mới, explanation và đáp án đúng; cùng format HTML+MathML, chỉ đổi số so với mẫu (dùng khi không phải multiple-choice hoặc không có 4 choices)."""
-    question: str = Field(description="New question content in the same HTML and MathML format as the sample, with only numerical values changed")
-    explanation: str = Field(description="New explanation in the same HTML and MathML format as the sample, with only numerical values changed to match the new question")
-    correct_answer: str = Field(description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right choice or value)")
+
+    question: str = Field(
+        description="New question content in the same HTML and MathML format as the sample, with only numerical values changed"
+    )
+    explanation: str = Field(
+        description="New explanation in the same HTML and MathML format as the sample, with only numerical values changed to match the new question"
+    )
+    correct_answer: str = Field(
+        description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right choice or value)"
+    )
 
 
 class GeneratedMultipleChoiceContent(BaseModel):
     """Câu hỏi multiple-choice: câu hỏi + explanation + đúng 4 lựa chọn (A,B,C,D) + chữ cái đáp án đúng."""
-    question: str = Field(description="New question content, same HTML+MathML format with only numerical values changed")
-    explanation: str = Field(description="New explanation, same format with only numbers changed to match the new question")
-    choices: List[str] = Field(description="Exactly 4 answer choices in order A, B, C, D; each is HTML+MathML string with only numbers changed")
-    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer (A, B, C, or D)")
+
+    question: str = Field(
+        description="New question content, same HTML+MathML format with only numerical values changed"
+    )
+    explanation: str = Field(
+        description="New explanation, same format with only numbers changed to match the new question"
+    )
+    choices: List[str] = Field(
+        description="Exactly 4 answer choices in order A, B, C, D; each is HTML+MathML string with only numbers changed"
+    )
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(
+        description="The letter of the correct answer (A, B, C, or D)"
+    )
+
     @field_validator("choices")
     @classmethod
     def choices_must_be_four(cls, v: List[str]) -> List[str]:
@@ -62,13 +78,25 @@ class GeneratedMultipleChoiceContent(BaseModel):
 
 class GeneratedGraphQuestionContent(BaseModel):
     """Output cho câu hỏi có đồ thị: LLM chỉ sinh text mới + số liệu đồ thị mới (không sinh SVG)."""
-    question_text: str = Field(description="New question text (without SVG), same format with only numbers changed")
-    explanation: str = Field(description="New explanation, same format with only numbers changed")
-    choices: List[str] = Field(description="Exactly 4 answer choices in order A, B, C, D; each with only numbers changed")
-    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(description="The letter of the correct answer")
-    new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
-    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
-    new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
+
+    question_text: str = Field(
+        description="New question text (without SVG), same format with only numbers changed"
+    )
+    explanation: str = Field(
+        description="New explanation, same format with only numbers changed"
+    )
+    choices: List[str] = Field(
+        description="Exactly 4 answer choices in order A, B, C, D; each with only numbers changed"
+    )
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(
+        description="The letter of the correct answer"
+    )
+    tikz_code: str = Field(
+        description="TikZ code used to render the new graph. Return tikzpicture body or full tikzpicture block."
+    )
+    new_long_description: str = Field(
+        description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original."
+    )
 
     @field_validator("choices")
     @classmethod
@@ -76,39 +104,83 @@ class GeneratedGraphQuestionContent(BaseModel):
         if v is None or len(v) != 4:
             raise ValueError("choices phải có đúng 4 phần tử (A, B, C, D)")
         return [str(x).strip() for x in v]
-    
-    @field_validator("new_y_values")
+
+
+class GeneratedGraphQuestionTextContent(BaseModel):
+    """Text-only output cho câu hỏi multiple-choice có đồ thị."""
+
+    question_text: str = Field(
+        description="New question text (without SVG), same format with only numbers changed"
+    )
+    explanation: str = Field(
+        description="New explanation, same format with only numbers changed"
+    )
+    choices: List[str] = Field(
+        description="Exactly 4 answer choices in order A, B, C, D; each with only numbers changed"
+    )
+    correct_answer_letter: Literal["A", "B", "C", "D"] = Field(
+        description="The letter of the correct answer"
+    )
+    new_long_description: str = Field(
+        description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original."
+    )
+
+    @field_validator("choices")
     @classmethod
-    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
-        """Ensure new_x_values and new_y_values have the same length."""
-        if hasattr(info, 'data') and 'new_x_values' in info.data:
-            x_values = info.data['new_x_values']
-            if len(x_values) != len(v):
-                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
-        return v
+    def choices_must_be_four(cls, v: List[str]) -> List[str]:
+        if v is None or len(v) != 4:
+            raise ValueError("choices phải có đúng 4 phần tử (A, B, C, D)")
+        return [str(x).strip() for x in v]
+
+
+class GeneratedTikzDiagramContent(BaseModel):
+    """TikZ-only output produced from finalized graph text + description."""
+
+    tikz_code: str = Field(
+        description="TikZ code used to render the new graph. Must be a complete tikzpicture block."
+    )
 
 
 class GeneratedGraphFreeResponseContent(BaseModel):
     """Output cho câu hỏi tự luận có đồ thị: LLM sinh text mới + số liệu đồ thị mới + correct_answer (không sinh SVG)."""
-    question_text: str = Field(description="New question text (without SVG), same format with only numbers changed")
-    explanation: str = Field(description="New explanation, same format with only numbers changed")
-    correct_answer: str = Field(description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right value)")
-    new_x_values: List[Union[int, float]] = Field(description="New x-axis values for the graph (e.g., years [2015, 2016, ...] or days [1.0, 2.0, 3.0, ...])")
-    new_y_values: List[float] = Field(description="New y-axis values for the graph (e.g., percentages or temperatures)")
-    new_long_description: str = Field(description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original.")
-    @field_validator("new_y_values")
-    @classmethod
-    def validate_xy_length_match(cls, v: List[float], info) -> List[float]:
-        """Ensure new_x_values and new_y_values have the same length."""
-        if hasattr(info, 'data') and 'new_x_values' in info.data:
-            x_values = info.data['new_x_values']
-            if len(x_values) != len(v):
-                raise ValueError(f"new_x_values and new_y_values must have the same length. Got {len(x_values)} x-values and {len(v)} y-values.")
-        return v
+
+    question_text: str = Field(
+        description="New question text (without SVG), same format with only numbers changed"
+    )
+    explanation: str = Field(
+        description="New explanation, same format with only numbers changed"
+    )
+    correct_answer: str = Field(
+        description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right value)"
+    )
+    tikz_code: str = Field(
+        description="TikZ code used to render the new graph. Return tikzpicture body or full tikzpicture block."
+    )
+    new_long_description: str = Field(
+        description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new x/y values. MUST preserve the same HTML structure as the original."
+    )
+
+
+class GeneratedGraphFreeResponseTextContent(BaseModel):
+    """Text-only output cho câu hỏi tự luận có đồ thị."""
+
+    question_text: str = Field(
+        description="New question text (without SVG), same format with only numbers changed"
+    )
+    explanation: str = Field(
+        description="New explanation, same format with only numbers changed"
+    )
+    correct_answer: str = Field(
+        description="The correct answer for the new question, in the same format as the sample (e.g. HTML/MathML string of the right value)"
+    )
+    new_long_description: str = Field(
+        description="New long description for the graph in HTML format (<ul><li>...</li></ul>), matching the new figure values. MUST preserve the same HTML structure as the original."
+    )
 
 
 class SourceMetadata(BaseModel):
     """Fields copied directly from the input sample (no inference)."""
+
     section: str = ""
     category: str = ""
     difficulty: str = ""
@@ -122,6 +194,7 @@ class SourceMetadata(BaseModel):
 
 class DerivedAnalysis(BaseModel):
     """Fields inferred from mathematical analysis."""
+
     skill: str = ""
     sub_skill: str = ""
     problem_family: str = ""
@@ -137,6 +210,7 @@ class DerivedAnalysis(BaseModel):
 
 class ProblemAnalysis(BaseModel):
     """Analysis artifact with explicit source vs derived separation."""
+
     source_fields: SourceMetadata
     derived_fields: DerivedAnalysis
     missing_source_fields: List[str] = Field(default_factory=list)
@@ -145,6 +219,7 @@ class ProblemAnalysis(BaseModel):
 
 class BlueprintParameter(BaseModel):
     """A parameter in the math blueprint that can be varied safely."""
+
     name: str
     role: str = ""
     value_type: str = "number"
@@ -155,6 +230,7 @@ class BlueprintParameter(BaseModel):
 
 class ProblemBlueprint(BaseModel):
     """Blueprint combining copied source metadata with inferred analysis."""
+
     source_metadata: SourceMetadata
     derived_analysis: DerivedAnalysis
     known_values: Dict[str, Any] = Field(default_factory=dict)
@@ -166,6 +242,7 @@ class ProblemBlueprint(BaseModel):
 
 class StructuredGeneratedInstance(BaseModel):
     """Generated instance produced from blueprint."""
+
     question: str
     explanation: str
     choices: Optional[List[str]] = None
@@ -177,6 +254,7 @@ class StructuredGeneratedInstance(BaseModel):
 
 class GenerationVerificationReport(BaseModel):
     """Verification output for generated instance quality and consistency."""
+
     is_solvable: bool
     answer_format_valid: bool
     reasoning_alignment: str = ""
@@ -219,7 +297,9 @@ def _build_input_snapshot(
         "id": sample.get("id"),
         "source_metadata": source_metadata,
         "has_graph": has_graph,
-        "source_fields_present": [k for k, v in source_metadata.items() if v not in (None, "", [])],
+        "source_fields_present": [
+            k for k, v in source_metadata.items() if v not in (None, "", [])
+        ],
         "correct_answer_letter": correct_letter,
         "correct_answer_content": original_correct_answer,
     }
@@ -307,7 +387,11 @@ def _build_structured_instance_prompt(
     *,
     creative_mode: bool,
 ) -> str:
-    generation_mode = "new scenario with same solving logic" if creative_mode else "conservative parameter variation"
+    generation_mode = (
+        "new scenario with same solving logic"
+        if creative_mode
+        else "conservative parameter variation"
+    )
     return f"""You are an SAT Math generator.
 
 Generate ONE new problem instance from the provided blueprint.
@@ -388,469 +472,166 @@ Generated instance:
 Return ONLY a JSON object matching the target schema.
 """
 
+
 # ---------------------------------------------------------------------------
 # Utility functions cho xử lý đồ thị
 # ---------------------------------------------------------------------------
 def _remove_svg_and_long_desc_from_html(html: str) -> str:
     """Loại bỏ toàn bộ SVG element và long description (sr-only div) khỏi HTML."""
     # Remove SVG
-    result = re.sub(r'<svg\b.*?</svg>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    result = re.sub(r"<svg\b.*?</svg>", "", html, flags=re.DOTALL | re.IGNORECASE)
     # Remove sr-only div containing long description
-    result = re.sub(r'<div[^>]*class="sr-only"[^>]*>.*?</div>', '', result, flags=re.DOTALL | re.IGNORECASE)
+    result = re.sub(
+        r'<div[^>]*class="sr-only"[^>]*>.*?</div>',
+        "",
+        result,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    # Remove visible graph long-description block from previous generations.
+    result = re.sub(
+        r'<div[^>]*class="graph-long-description"[^>]*>.*?</div>',
+        "",
+        result,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
     return result
 
 
-def _generate_line_graph_svg(
-    x_values: List[Union[int, float]],
-    y_values: List[float],
-    x_label: str = "Model year",
-    y_label: str = "Percent of cars for sale",
-    y_unit: str = "%",
-    width: float = 8,
-    height: float = 5,
-) -> str:
-    """
-    Tạo line graph SVG bằng matplotlib.
-    
-    Args:
-        x_values: Danh sách giá trị trục x (vd: năm)
-        y_values: Danh sách giá trị trục y (vd: percent)
-        x_label: Nhãn trục x
-        y_label: Nhãn trục y
-        y_unit: Đơn vị y (vd: "%")
-        width: Chiều rộng đồ thị (inches)
-        height: Chiều cao đồ thị (inches)
-    
-    Returns:
-        SVG string của đồ thị
-    """
-    # Tạo figure với kích thước phù hợp
-    fig, ax = plt.subplots(figsize=(width, height))
-    
-    # Vẽ line graph với markers
-    ax.plot(x_values, y_values, marker='o', markersize=8, linewidth=2, color='black')
-    
-    # Thiết lập labels
-    ax.set_xlabel(x_label, fontsize=11)
-    ax.set_ylabel(y_label, fontsize=11)
-    
-    # Thiết lập trục x - hiển thị tất cả năm, xoay nếu cần
-    ax.set_xticks(x_values)
-    ax.set_xticklabels([str(x) for x in x_values], rotation=45, ha='right')
-    
-    # Thiết lập trục y - từ 0 đến max + buffer, với grid lines
-    y_max = max(y_values)
-    y_axis_max = int((y_max // 5 + 1) * 5)  # Round up to nearest 5
-    ax.set_ylim(0, y_axis_max)
-    ax.set_yticks(range(0, y_axis_max + 1, 5))
-    if y_unit == "%":
-        ax.set_yticklabels([f"{y}%" for y in range(0, y_axis_max + 1, 5)])
-    
-    # Thêm grid
-    ax.grid(True, linestyle='-', alpha=0.7)
-    ax.set_axisbelow(True)
-    
-    # Tight layout để tránh cắt labels
-    plt.tight_layout()
-    
-    # Export to SVG string
-    svg_buffer = io.BytesIO()
-    fig.savefig(svg_buffer, format='svg', bbox_inches='tight')
-    plt.close(fig)  # Đóng figure để giải phóng memory
-    
-    svg_buffer.seek(0)
-    svg_string = svg_buffer.getvalue().decode('utf-8')
-    
-    # Loại bỏ XML declaration và DOCTYPE nếu có
-    svg_string = re.sub(r'<\?xml[^>]*\?>', '', svg_string)
-    svg_string = re.sub(r'<!DOCTYPE[^>]*>', '', svg_string)
-    svg_string = svg_string.strip()
-    
-    return svg_string
+import re
 
 
-def _generate_bar_graph_svg(
-    x_values: List[Union[int, float]],
-    y_values: List[float],
-    x_label: str = "Group",
-    y_label: str = "Number of books collected",
-    y_unit: str = "",
-    width: float = 8,
-    height: float = 5,
-) -> str:
+def _extract_tikz_body(tikz_code: str) -> str:
     """
-    Tạo bar graph SVG bằng matplotlib.
-    
-    Args:
-        x_values: Danh sách giá trị trục x (vd: group 1, 2, 3, 4)
-        y_values: Danh sách giá trị trục y (vd: số lượng)
-        x_label: Nhãn trục x
-        y_label: Nhãn trục y
-        y_unit: Đơn vị y (vd: "", "books")
-        width: Chiều rộng đồ thị (inches)
-        height: Chiều cao đồ thị (inches)
-    
-    Returns:
-        SVG string của đồ thị
+    Ensures the returned string is a complete \\begin{tikzpicture} ... \\end{tikzpicture} block.
+    Fixes cases where the LLM only returns the inner 'axis' content or includes markdown wrappers.
     """
-    # Tạo figure với kích thước phù hợp
-    fig, ax = plt.subplots(figsize=(width, height))
-    
-    # Vẽ bar graph
-    bars = ax.bar(x_values, y_values, color='gray', edgecolor='black', linewidth=1.5, width=0.6)
-    
-    # Thiết lập labels
-    ax.set_xlabel(x_label, fontsize=11)
-    ax.set_ylabel(y_label, fontsize=11)
-    
-    # Thiết lập trục x - hiển thị tất cả giá trị
-    ax.set_xticks(x_values)
-    ax.set_xticklabels([str(x) for x in x_values])
-    
-    # Thiết lập trục y - từ 0 đến max + buffer
-    y_max = max(y_values)
-    # Round up to nearest 10 for bar graphs (usually larger numbers)
-    if y_max <= 20:
-        y_axis_max = int((y_max // 5 + 1) * 5)
-        tick_interval = 5
-    else:
-        y_axis_max = int((y_max // 10 + 1) * 10)
-        tick_interval = 10
-    
-    ax.set_ylim(0, y_axis_max)
-    ax.set_yticks(range(0, y_axis_max + 1, tick_interval))
-    if y_unit:
-        ax.set_yticklabels([f"{y}{y_unit}" for y in range(0, y_axis_max + 1, tick_interval)])
-    
-    # Thêm grid (chỉ trục y)
-    ax.grid(True, axis='y', linestyle='-', alpha=0.7)
-    ax.set_axisbelow(True)
-    
-    # Tight layout để tránh cắt labels
-    plt.tight_layout()
-    
-    # Export to SVG string
-    svg_buffer = io.BytesIO()
-    fig.savefig(svg_buffer, format='svg', bbox_inches='tight')
-    plt.close(fig)  # Đóng figure để giải phóng memory
-    
-    svg_buffer.seek(0)
-    svg_string = svg_buffer.getvalue().decode('utf-8')
-    
-    # Loại bỏ XML declaration và DOCTYPE nếu có
-    svg_string = re.sub(r'<\?xml[^>]*\?>', '', svg_string)
-    svg_string = re.sub(r'<!DOCTYPE[^>]*>', '', svg_string)
-    svg_string = svg_string.strip()
-    
-    return svg_string
+    code = (tikz_code or "").strip()
+    if not code:
+        raise ValueError("TikZ code is empty")
 
+    # Remove markdown code blocks if the LLm ignored the prompt instructions
+    code = re.sub(r"```[a-z]*", "", code).replace("```", "").strip()
 
-def _generate_scatter_plot_svg(
-    x_values: List[float],
-    y_values: List[float],
-    x_label: str = "Time (days since June 1)",
-    y_label: str = "Temperature (°F)",
-    y_unit: str = "°F",
-    width: float = 8,
-    height: float = 5,
-) -> str:
-    """
-    Tạo scatter plot SVG bằng matplotlib.
-    
-    Args:
-        x_values: Danh sách giá trị trục x (vd: days [1, 2, 3, 4, 5, 6, 7])
-        y_values: Danh sách giá trị trục y (vd: temperatures [69, 60, 73, ...])
-        x_label: Nhãn trục x
-        y_label: Nhãn trục y
-        y_unit: Đơn vị y (vd: "°F")
-        width: Chiều rộng đồ thị (inches)
-        height: Chiều cao đồ thị (inches)
-    
-    Returns:
-        SVG string của đồ thị
-    """
-    # Tạo figure với kích thước phù hợp
-    fig, ax = plt.subplots(figsize=(width, height))
-    
-    # Vẽ scatter plot
-    ax.scatter(x_values, y_values, s=60, color='black', marker='o', zorder=3)
-    
-    # Thiết lập labels
-    ax.set_xlabel(x_label, fontsize=11)
-    ax.set_ylabel(y_label, fontsize=11)
-    
-    # Thiết lập trục x - hiển thị tất cả giá trị
-    if all(isinstance(x, (int, float)) for x in x_values):
-        x_min, x_max = min(x_values), max(x_values)
-        ax.set_xlim(x_min - 0.5, x_max + 0.5)
-        ax.set_xticks(x_values)
-        ax.set_xticklabels([str(int(x)) if x == int(x) else str(x) for x in x_values])
-    
-    # Thiết lập trục y
-    y_min, y_max = min(y_values), max(y_values)
-    y_range = y_max - y_min
-    # Add 10% padding
-    y_axis_min = max(0, y_min - y_range * 0.1)
-    y_axis_max = y_max + y_range * 0.1
-    
-    # Round to nice numbers
-    if y_axis_max <= 100:
-        tick_interval = 10
-    else:
-        tick_interval = 20
-    
-    y_axis_min = int(y_axis_min // tick_interval) * tick_interval
-    y_axis_max = int((y_axis_max // tick_interval) + 1) * tick_interval
-    
-    ax.set_ylim(y_axis_min, y_axis_max)
-    ax.set_yticks(range(y_axis_min, y_axis_max + 1, tick_interval))
-    if y_unit:
-        ax.set_yticklabels([f"{y}{y_unit}" for y in range(y_axis_min, y_axis_max + 1, tick_interval)])
-    
-    # Thêm grid
-    ax.grid(True, linestyle='-', alpha=0.7, zorder=0)
-    ax.set_axisbelow(True)
-    
-    # Tight layout để tránh cắt labels
-    plt.tight_layout()
-    
-    # Export to SVG string
-    svg_buffer = io.BytesIO()
-    fig.savefig(svg_buffer, format='svg', bbox_inches='tight')
-    plt.close(fig)  # Đóng figure để giải phóng memory
-    
-    svg_buffer.seek(0)
-    svg_string = svg_buffer.getvalue().decode('utf-8')
-    
-    # Loại bỏ XML declaration và DOCTYPE nếu có
-    svg_string = re.sub(r'<\?xml[^>]*\?>', '', svg_string)
-    svg_string = re.sub(r'<!DOCTYPE[^>]*>', '', svg_string)
-    svg_string = svg_string.strip()
-    
-    return svg_string
-
-
-def _generate_aria_label(
-    x_values: List[Union[int, float]],
-    y_values: List[float],
-    x_label: str = "Model year",
-    y_label: str = "Percent of cars for sale",
-    y_unit: str = "%",
-    graph_type: str = "line",
-) -> str:
-    """
-    Tạo aria-label cho đồ thị (accessibility).
-    """
-    x_min, x_max = min(x_values), max(x_values)
-    y_min, y_max = min(y_values), max(y_values)
-    
-    # Determine tick interval based on graph type and y_max
-    if graph_type == "bar":
-        y_axis_min = 0
-        if y_max <= 20:
-            y_axis_max = int((y_max // 5 + 1) * 5)
-            tick_interval = 5
-        else:
-            y_axis_max = int((y_max // 10 + 1) * 10)
-            tick_interval = 10
-    elif graph_type == "scatter":
-        # Scatter plots use different y-axis range
-        y_range = y_max - y_min
-        y_axis_min = max(0, y_min - y_range * 0.1)
-        y_axis_max = y_max + y_range * 0.1
-        
-        if y_axis_max <= 100:
-            tick_interval = 10
-        else:
-            tick_interval = 20
-        
-        y_axis_min = int(y_axis_min // tick_interval) * tick_interval
-        y_axis_max = int((y_axis_max // tick_interval) + 1) * tick_interval
-    else:  # line graph
-        y_axis_min = 0
-        y_axis_max = int((y_max // 5 + 1) * 5)
-        tick_interval = 5
-    
-    if graph_type == "scatter":
-        graph_type_text = "scatter plot"
-    elif graph_type == "bar":
-        graph_type_text = "bar graph"
-    else:
-        graph_type_text = "line graph"
-    
-    # Format for scatter plot is slightly different
-    if graph_type == "scatter":
-        return (
-            f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
-            f"It ranges from {x_min} to {x_max} in increments of 1. "
-            f"The vertical axis is labeled {y_label}. "
-            f"It ranges from {y_axis_min}{y_unit} to {y_axis_max}{y_unit} in increments of {tick_interval}. "
-            f"Refer to long description."
-        )
-    else:
-        return (
-            f"A {graph_type_text}. The horizontal axis is labeled {x_label}. "
-            f"It ranges from {x_min} to {x_max} in increments of 1. "
-            f"The vertical axis is labeled {y_label}. "
-            f"It ranges from 0{y_unit} to {y_axis_max}{y_unit} in increments of 1, "
-            f"with values marked every {tick_interval} grid lines. Refer to long description."
-        )
-
-
-def _update_graph_in_html(
-    original_html: str,
-    old_x_values: List[Union[int, float]],
-    old_y_values: List[float],
-    new_x_values: List[Union[int, float]],
-    new_y_values: List[float],
-    new_long_description: str,
-    x_label: str = "Model year",
-    y_label: str = "Percent of cars for sale",
-    y_unit: str = "%",
-    graph_type: str = "line",
-) -> str:
-    """
-    Thay thế SVG cũ bằng SVG mới được tạo từ matplotlib và cập nhật long description.
-    
-    Args:
-        original_html: HTML gốc chứa SVG và long description
-        old_x_values: Giá trị x cũ (không dùng trực tiếp, giữ cho compatibility)
-        old_y_values: Giá trị y cũ (không dùng trực tiếp, giữ cho compatibility)
-        new_x_values: Giá trị x mới
-        new_y_values: Giá trị y mới
-        new_long_description: Mô tả đồ thị mới (sr-only text)
-        x_label: Nhãn trục x
-        y_label: Nhãn trục y
-        y_unit: Đơn vị y
-        graph_type: Loại đồ thị ("line" hoặc "bar")
-    
-    Returns:
-        HTML với SVG mới và long description đã cập nhật
-    """
-    result = original_html
-    
-    # 1. Tạo SVG mới bằng matplotlib (tùy loại đồ thị)
-    if graph_type == "bar":
-        new_svg = _generate_bar_graph_svg(
-            x_values=new_x_values,
-            y_values=new_y_values,
-            x_label=x_label,
-            y_label=y_label,
-            y_unit=y_unit,
-        )
-    elif graph_type == "scatter":
-        new_svg = _generate_scatter_plot_svg(
-            x_values=new_x_values,
-            y_values=new_y_values,
-            x_label=x_label,
-            y_label=y_label,
-            y_unit=y_unit,
-        )
-    else:  # line graph (default)
-        new_svg = _generate_line_graph_svg(
-            x_values=new_x_values,
-            y_values=new_y_values,
-            x_label=x_label,
-            y_label=y_label,
-            y_unit=y_unit,
-        )
-    
-    # 2. Tạo aria-label mới cho accessibility
-    new_aria_label = _generate_aria_label(
-        x_values=new_x_values,
-        y_values=new_y_values,
-        x_label=x_label,
-        y_label=y_label,
-        y_unit=y_unit,
-        graph_type=graph_type,
+    # Case 1: Check if it's already a full tikzpicture block
+    # We use group(0) to keep the \begin and \end tags plus any [options]
+    match = re.search(
+        r"(\\begin\{tikzpicture\}.*?\\end\{tikzpicture\})", code, flags=re.DOTALL
     )
-    
-    # 3. Thêm aria-label vào SVG mới
-    # Tìm <svg và thêm role="img" aria-label="..."
-    new_svg = re.sub(
-        r'<svg\b',
-        f'<svg role="img" aria-label="{new_aria_label}"',
-        new_svg,
-        count=1
-    )
-    
-    # 4. Thay thế SVG cũ bằng SVG mới
-    # Pattern: <svg ...>...</svg>
-    result = re.sub(
-        r'<svg\b[^>]*>.*?</svg>',
-        new_svg,
-        result,
-        count=1,
-        flags=re.DOTALL | re.IGNORECASE
-    )
-    
-    # 5. Cập nhật long description trong <div class="sr-only">
-    long_desc_pattern = r'(<div[^>]*class="sr-only"[^>]*>)(.*?)(</div>)'
-    result = re.sub(
-        long_desc_pattern,
-        lambda m: m.group(1) + new_long_description + m.group(3),
-        result,
-        flags=re.DOTALL | re.IGNORECASE
-    )
-    
-    return result
+    if match:
+        return match.group(1).strip()
+
+    # Case 2: If the LLM only returned \begin{axis} or raw draw commands, wrap it
+    # This prevents the "500 Internal Server Error" caused by missing environments
+    return f"\\begin{{tikzpicture}}\n{code}\n\\end{{tikzpicture}}"
 
 
-def _verify_graph_correct_answer(
-    question_text: str,
-    choices: List[str],
-    x_values: List[Union[int, float]],
-    y_values: List[float],
-    llm_answer_letter: str,
+def _format_long_description_for_display(long_description_html: str) -> str:
+    """Format long description HTML so bullets and text align cleanly to the left."""
+    content = (long_description_html or "").strip()
+    if not content:
+        content = "<ul><li>Generated graph description is unavailable.</li></ul>"
+
+    # If model wraps content in a div, keep only inner HTML for the display container.
+    content = re.sub(r"^\s*<div[^>]*>", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"</div>\s*$", "", content, flags=re.IGNORECASE)
+
+    # Ensure list containers and list items render with compact, left-aligned spacing.
+    content = re.sub(
+        r"<ul(\s[^>]*)?>",
+        '<ul style="margin:0;padding-left:1.1rem;list-style-position:outside;text-align:left;">',
+        content,
+        flags=re.IGNORECASE,
+    )
+    content = re.sub(
+        r"<li(\s[^>]*)?>",
+        '<li style="margin:0.2rem 0;padding-left:0.1rem;text-align:left;">',
+        content,
+        flags=re.IGNORECASE,
+    )
+
+    return content
+
+
+def _render_tikz_to_data_uri(
+    tikz_code: str, tikz_service_url: Optional[str] = None
 ) -> str:
-    """
-    Verify and calculate the correct answer based on the question and graph data.
-    
-    Args:
-        question_text: The question text
-        choices: List of 4 choices (A, B, C, D)
-        x_values: X-axis values from the graph
-        y_values: Y-axis values from the graph
-        llm_answer_letter: The answer letter suggested by LLM
-    
-    Returns:
-        The correct answer letter (A, B, C, or D)
-    """
-    # Parse question to understand what it's asking
-    q_lower = question_text.lower()
-    
-    # Determine what we're looking for
-    looking_for_min = any(keyword in q_lower for keyword in ["smallest", "lowest", "minimum", "least"])
-    looking_for_max = any(keyword in q_lower for keyword in ["largest", "highest", "maximum", "greatest", "most"])
-    
-    if not looking_for_min and not looking_for_max:
-        # Can't determine - trust LLM
-        return llm_answer_letter
-    
-    # Find the correct x_value
-    if looking_for_min:
-        min_idx = y_values.index(min(y_values))
-        correct_x = x_values[min_idx]
-    else:  # looking_for_max
-        max_idx = y_values.index(max(y_values))
-        correct_x = x_values[max_idx]
-    
-    # Map to choice - choices should contain the x_value
-    # Extract numeric values from choices
-    correct_letter = llm_answer_letter  # default
-    
-    for i, choice in enumerate(choices):
-        choice_str = str(choice).strip()
-        # Try to extract year/number from choice
-        import re
-        numbers = re.findall(r'\d+', choice_str)
-        if numbers:
-            choice_value = int(numbers[0]) if numbers[0].isdigit() else float(numbers[0])
-            if choice_value == correct_x or abs(choice_value - correct_x) < 0.01:
-                correct_letter = ["A", "B", "C", "D"][i]
-                break
-    
-    return correct_letter
+    """Preprocesses TikZ code with necessary libraries and renders it via compiler service."""
+    service_url = tikz_service_url or os.getenv(
+        "TIKZ_COMPILER_URL", "http://localhost:8000/compile-png"
+    )
+
+    # Step 1: Extract and validate the TikZ structure
+    clean_tikz_block = _extract_tikz_body(tikz_code)
+
+    # Step 2: Construct the final LaTeX snippet for the compiler
+    # If your server requires a full document, wrap this in \documentclass{standalone} \begin{document}
+    final_payload_code = clean_tikz_block
+
+    # Step 4: Prepare and Send Request
+    payload = json.dumps({"code": final_payload_code}).encode("utf-8")
+
+    # Debugging: Log the exact string sent to the compiler
+    with open("debug_tikz_payload.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {"sent_to_compiler": final_payload_code, "original_from_llm": tikz_code},
+            f,
+            indent=2,
+        )
+
+    req = urllib_request.Request(
+        service_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=30) as response:
+            binary = response.read()
+            content_type = response.headers.get("Content-Type", "").lower()
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"TikZ compiler HTTP {exc.code}: {detail[:300]}") from exc
+    except Exception as exc:
+        raise ValueError(f"TikZ compiler request failed: {exc}") from exc
+
+    if not binary:
+        raise ValueError("TikZ compiler returned empty image payload")
+
+    mime_type = "image/svg+xml" if "image/svg+xml" in content_type else "image/png"
+    encoded = base64.b64encode(binary).decode("ascii")
+
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def build_question_with_tikz_figure(
+    question_text_html: str,
+    tikz_code: str,
+    long_description_html: str,
+    tikz_service_url: Optional[str] = None,
+) -> str:
+    """Inject rendered TikZ figure into question HTML between intro and final question line."""
+    clean_question_text = _remove_svg_and_long_desc_from_html(question_text_html)
+    image_uri = _render_tikz_to_data_uri(tikz_code, tikz_service_url=tikz_service_url)
+    visible_long_desc = _format_long_description_for_display(long_description_html)
+
+    figure_block = (
+        f'<figure style="text-align:center;">'
+        f'<img src="{image_uri}" alt="Generated graph" style="max-width:100%;max-height:420px;height:auto;object-fit:contain;"/>'
+        f'<div class="graph-long-description" style="max-width:640px;margin:12px auto 0;text-align:left;line-height:1.45;">{visible_long_desc}</div>'
+        f'<div class="sr-only" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">{long_description_html}</div>'
+        f"</figure>"
+    )
+
+    parts = re.split(r"(<p[^>]*>.*?</p>)", clean_question_text, flags=re.DOTALL)
+    parts = [p for p in parts if p.strip()]
+
+    if len(parts) >= 2:
+        intro_text = "".join(parts[:-1])
+        question_part = parts[-1]
+        return f"{intro_text}\n{figure_block}\n{question_part}"
+
+    return f"{figure_block}\n{clean_question_text}"
 
 
 def _update_explanation_for_corrected_answer(
@@ -862,45 +643,45 @@ def _update_explanation_for_corrected_answer(
     """
     Update explanation when the correct answer letter changes.
     Replace references to the old letter with the new letter.
-    
+
     Args:
         original_explanation: The explanation from LLM
         old_letter: The old (incorrect) answer letter
         new_letter: The new (correct) answer letter
         choices: List of 4 choices
-    
+
     Returns:
         Updated explanation
     """
     explanation = original_explanation
-    
+
     # Replace "Choice X is correct" -> "Choice Y is correct"
     explanation = re.sub(
-        rf'\bChoice {old_letter} is correct\b',
-        f'Choice {new_letter} is correct',
+        rf"\bChoice {old_letter} is correct\b",
+        f"Choice {new_letter} is correct",
         explanation,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
-    
+
     # Replace "Choice X is the best answer" -> "Choice Y is the best answer"
     explanation = re.sub(
-        rf'\bChoice {old_letter} is the best answer\b',
-        f'Choice {new_letter} is the best answer',
+        rf"\bChoice {old_letter} is the best answer\b",
+        f"Choice {new_letter} is the best answer",
         explanation,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
-    
+
     # Replace other letters as incorrect
     for letter in ["A", "B", "C", "D"]:
         if letter == new_letter:
             continue
         explanation = re.sub(
-            rf'\bChoice {letter} is correct\b',
-            f'Choice {letter} is incorrect',
+            rf"\bChoice {letter} is correct\b",
+            f"Choice {letter} is incorrect",
             explanation,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
-    
+
     return explanation
 
 
@@ -914,34 +695,36 @@ def _build_prompt_graph_multiple_choice_freeform(
     section: str,
     difficulty: str,
 ) -> str:
-    """Free-form prompt for reasoning LLMs - graph multiple-choice questions."""
-    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)])
+    """Free-form prompt for reasoning LLMs - text-only graph multiple-choice questions."""
+    choices_text = "\n".join(
+        [f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)]
+    )
     long_desc_html = graph_spec.get("long_description_html", "")
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
-    
+
     # Add reasoning guidance for Medium/Hard questions
     reasoning_guidance = ""
     if difficulty.lower() in ["medium", "hard"]:
         reasoning_guidance = """\n\nCRITICAL FOR MEDIUM/HARD QUESTIONS:
-- REASON about the graph data before generating
-- Ensure x_values and y_values are REASONABLE and make practical sense
+- REASON about what the graph must communicate before generating TikZ
+- Ensure values implied by your explanation and choices are reasonable
 - For trend questions: ensure the trend is clear and interpretable
 - For min/max questions: make sure the extreme values are obviously distinguishable
 - Check that choices are plausible but have one clear correct answer
 - Avoid values that are too close together or too similar
 - Make sure the graph tells a coherent story with the data"""
-    
+
     return f"""You are an SAT question writer. This is a multiple-choice question with a GRAPH.
 
-Task: Generate NEW numerical values for the graph and update all text accordingly.
+Task: Generate the finalized graph-aware text content first. Do NOT generate TikZ yet.
 
 IMPORTANT:
-- Generate NEW x_values and y_values for the graph
-- Update question text, explanation, and choices to match new data
+- Update question text, explanation, and choices to match the graph scenario you create
 - Keep HTML and MathML structure EXACTLY as in sample
-- CRITICAL: Calculate which answer is correct based on YOUR new data
+- CRITICAL: Calculate which answer is correct based on YOUR generated graph
 - Do NOT just copy the sample's correct letter ({correct_letter}) - it may be different for your data
-- Preserve the HTML structure of the long description (<ul><li>...</li></ul>){reasoning_guidance}
+- Preserve the HTML structure of the long description (<ul><li>...</li></ul>)
+- Make the long description detailed enough that a separate TikZ generator can reconstruct the graph faithfully{reasoning_guidance}
 
 Original Graph Specification:
 {graph_spec_json}
@@ -981,13 +764,7 @@ CHOICE_D:
 [Fourth answer choice]
 
 CORRECT_ANSWER:
-[Letter A, B, C, or D - CALCULATE based on your new data]
-
-NEW_X_VALUES:
-[List of new x-axis values, e.g., 2015, 2016, 2017, 2018, 2019]
-
-NEW_Y_VALUES:
-[List of new y-axis values, e.g., 10.5, 15.2, 8.7, 12.3, 18.9]
+[Letter A, B, C, or D - CALCULATE based on your generated graph]
 
 NEW_LONG_DESCRIPTION:
 [HTML description using <ul><li>...</li></ul> format with new values]
@@ -1004,37 +781,33 @@ def _build_prompt_graph_multiple_choice(
     section: str,
     difficulty: str,
 ) -> str:
-    """Prompt cho câu hỏi multiple-choice có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
+    """Prompt text-only cho câu hỏi multiple-choice có đồ thị."""
     # Do not include "Choice A:/B:/..." prefixes — UI will display A/B/C/D
     choices_text = "\n".join(original_choices)
-    
+
     # Extract long_description_html for the prompt
     long_desc_html = graph_spec.get("long_description_html", "")
-    
+
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
-    
+
     return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question with a GRAPH/CHART.
 
-Task: Generate new numerical values for the graph and update all related text accordingly.
+Task: Generate the graph-aware textual content first. Do NOT generate TikZ yet.
 
 IMPORTANT:
-- The question contains a graph (SVG and long description will be handled separately by code).
-- You must generate NEW x_values and y_values for the graph.
-- Update the question text, explanation, choices to match the new graph data.
-- Keep the same structure and wording, only change numbers.
+- Update the question text, explanation, choices, and long description so they all describe the SAME new graph scenario.
+- Keep the same structure and wording, only change the numbers and the graph code.
+- The long description must contain enough detail for a separate TikZ generator to reconstruct the intended graph faithfully.
+- Make the data visually interpretable: no ambiguous ties unless the prompt clearly intends them.
+- Preserve the exact HTML structure of the original long description.
 
 CRITICAL - CORRECT ANSWER CALCULATION (READ CAREFULLY):
-- DO NOT COPY the sample's correct_answer_letter ({correct_letter}). The sample letter is {correct_letter}, but your answer WILL BE DIFFERENT if the new data changes which choice is correct.
+- DO NOT COPY the sample's correct_answer_letter ({correct_letter}). The sample letter is {correct_letter}, but your answer WILL BE DIFFERENT if your generated graph changes which choice is correct.
 - YOU MUST follow these steps IN ORDER:
-  1. Generate new_x_values and new_y_values
-  2. Read the question carefully to understand what it's asking (e.g., "which year has the smallest value", "which period has the greatest increase", etc.)
-  3. Using your NEW data (new_x_values and new_y_values), calculate which answer is correct
-  4. Set correct_answer_letter to the letter (A, B, C, or D) that corresponds to the correct answer based on your NEW data
-- EXAMPLE: If the question asks "In which year was the percentage the smallest?" and your new_y_values = [15, 8, 12, 10] with new_x_values = [2020, 2021, 2022, 2023], the correct answer is 2021 (smallest value is 8). If 2021 is choice B, then correct_answer_letter = "B", even if the sample was "{correct_letter}".
-
-- The 4 choices should be the same type as the original (e.g., if original choices are years, new choices should also be years from new_x_values).
-- DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
-- CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
+    1. Generate a coherent new graph scenario as text and long description.
+    2. Read the question carefully to understand what it's asking (e.g., "which year has the smallest value", "which period has the greatest increase", etc.).
+    3. Using your generated graph scenario, calculate which answer is correct.
+    4. Set correct_answer_letter to the letter (A, B, C, or D) that corresponds to the correct answer.
 
 Original GraphSpec:
 {graph_spec_json}
@@ -1061,20 +834,260 @@ Sample 4 choices (correct answer in the sample is {correct_letter}, but you may 
 
 Category: {category}. Section: {section}. Difficulty: {difficulty}.
 
-Return a JSON object with:
-- question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
-- explanation: new explanation (numbers changed to match new graph and correct answer)
-- choices: list of 4 strings (A, B, C, D order, numbers changed). If the question asks about years/labels, choices should be 4 different x_values from new_x_values.
-- correct_answer_letter: The letter (A, B, C, or D) of the correct answer BASED ON YOUR NEW DATA. DO NOT just copy "{correct_letter}" from the sample. Calculate which choice is actually correct using your new_x_values and new_y_values, then return that letter.
-- new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...] or [1.0, 2.0, 3.0, ...])
-- new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
-- new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
+Return a JSON object with exactly these keys:
+- "question_text": new question text (without long description, only numbers changed in the intro and question sentences).
+- "explanation": new explanation (numbers changed to match new graph and correct answer).
+- "choices": list of 4 strings (A, B, C, D order, numbers changed).
+- "correct_answer_letter": The letter (A, B, C, or D) of the correct answer BASED ON YOUR GENERATED GRAPH SCENARIO. Calculate this carefully.
+- "new_long_description": new graph description in HTML format, MUST use the exact same <ul><li>...</li></ul> structure as the original, only changing the numbers.
 
 You must output ONLY valid JSON.
-Do NOT include any explanation.
-Do NOT include <think> tags.
-Do NOT include reasoning.
+Do NOT include any markdown code blocks (like ```json).
+Do NOT include any explanation outside the JSON.
 Return ONLY the JSON object.
+"""
+
+
+def _build_prompt_tikz_from_graph_context(
+    *,
+    question_text: str,
+    explanation: str,
+    choices: List[str],
+    correct_letter: str,
+    new_long_description: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Prompt chuyên biệt để sinh TikZ từ nội dung câu hỏi đã hoàn chỉnh."""
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+    choices_text = "\n".join(
+        [f"{chr(65+i)}. {choice}" for i, choice in enumerate(choices)]
+    )
+
+    return f"""You are a specialist TikZ figure generator for SAT math questions.
+
+Task: Generate ONLY the TikZ diagram for the finalized math figure below.
+
+You are NOT writing the question. The question, explanation, answer choices, and long description are already finalized.
+Your job is to analyze that content, determine what kind of figure is actually needed, and produce a professional TikZ rendering that matches it.
+
+PRIMARY GOAL:
+- Build a clean, readable figure that faithfully represents the finalized scenario.
+- Prioritize diagram quality, spacing, and label placement so elements do not overlap.
+- Use the long description as the authoritative source of the figure structure, labels, and numeric relationships.
+- Use the question/explanation/choices to understand what visual relationship must be clear.
+
+FIRST DECIDE THE FIGURE TYPE:
+Before drawing, infer which of these best matches the problem:
+1. Coordinate/data graph: line graph, bar chart, scatter-style plot, or data chart where axes are necessary.
+2. Geometry figure: triangle, quadrilateral, circle, angle, parallel lines with transversals, similar figures, or other Euclidean diagram.
+3. Algebra/other schematic: number line, function sketch without full chart scaffolding, labeled segments, or another simple mathematical schematic.
+
+CRITICAL AXIS RULE:
+- DO NOT draw x-axis and y-axis by default.
+- Draw axes ONLY if the problem is truly a coordinate/data graph and the axes are necessary to interpret the figure.
+- For geometry diagrams, angle diagrams, triangles, parallel lines, transversals, labeled segments, and not-to-scale illustrations, do NOT add coordinate axes.
+- If the sample/problem is a pure geometry figure like a right triangle or two parallel lines with an angle, draw only the needed geometric objects and labels.
+
+FIGURE-SPECIFIC DRAWING RULES:
+- If it is a coordinate/data graph:
+  - Use manual axes with \\draw[->].
+    - Normalize x coordinates to integers in 0..10 only.
+    - IMPORTANT: Do NOT use raw data values directly as y coordinates.
+    - Use approximate visual scaling only: map plotted y coordinates to a compact display band (recommended y in 2..8).
+    - Preserve order/trend and relative differences qualitatively, not exact numeric ratio.
+    - Show actual numeric values as labels near points/bars when needed for fidelity.
+  - Keep labels compact and readable.
+    - ANTI-ANSWER-LEAKAGE STYLING (MANDATORY):
+        - Do NOT highlight any data point/bar/segment that could reveal the answer.
+        - Use one uniform neutral style for all values in the same series (same color family, opacity, and line width).
+        - Never use a special color for max/min values, turning points, or the value tied to the correct option.
+        - Avoid attention cues on one value: no glow, bold-only emphasis, thicker stroke, unique marker, or unique fill on a single candidate.
+        - If multiple series are required, use balanced styling and a legend; color must encode series identity only, not correctness.
+- If it is a geometry figure:
+  - Choose coordinates freely to make the figure clean and well proportioned.
+  - Do not force x/y axes or graph framing.
+  - Preserve key relationships visually: parallel, perpendicular, equal length, acute/obtuse angle, intersection, right angle, etc.
+  - Add right-angle markers, angle arcs, tick marks, or segment labels only when they help express the intended math.
+  - If the problem is marked not to scale, the figure may be visually clean without exact metric proportionality, but it must still communicate the intended relationships.
+- If it is two parallel lines / angle-chasing:
+  - Draw two clearly parallel lines and the relevant transversal(s).
+  - Place angle labels away from intersections so they do not collide with lines.
+  - Make the relevant corresponding, alternate interior, vertical, or supplementary relationships visually obvious.
+
+TIKZ CODE REQUIREMENTS:
+- Return ONLY a single \\begin{{tikzpicture}} ... \\end{{tikzpicture}} block.
+- DO NOT output JSON, markdown, commentary, or any text outside the tikzpicture block.
+- DO NOT use pgfplots commands or environments: \\begin{{axis}}, \\addplot, xtick, xticklabels, xmin/xmax, ymin/ymax, grid=both.
+- Start with exactly: \\begin{{tikzpicture}}[line cap=round,line join=round]
+
+LAYOUT + QUALITY RULES:
+1. Coordinate bounds must satisfy abs(x) <= 12 and abs(y) <= 30.
+2. Scale and position the figure to fill the canvas well without crowding the edges.
+3. Use only the shapes needed for the math. Do not add redundant axes, grids, or decorations.
+4. Keep labels outside strokes whenever possible.
+5. If a label would overlap a segment, point, or angle marker, move it with a small offset.
+6. For triangles and polygons, keep vertices separated enough that side labels and angle markers fit cleanly.
+7. For angle diagrams, keep intersections uncluttered and use small arcs or labels that are easy to read.
+8. For charts, ensure tick labels and axis titles do not collide with data points or each other.
+9. Avoid dense loops, unnecessary shading, or complex ornamentation that could hurt compilation or readability.
+10. Self-check before final output: if the chosen figure type is wrong, if axes are unnecessary, if labels overlap, or if any coordinate breaks limits, regenerate the TikZ.
+11. For data graphs, keep the overall chart visually compact: target plotted height around 5-7 TikZ units (never full-range raw-value height).
+12. For bar charts, bars should fit comfortably inside the frame with consistent top margin; do not let tallest bar touch the top border.
+13. Final fairness check: ensure styling alone cannot be used to guess the correct answer.
+
+FINALIZED QUESTION TEXT:
+---
+{question_text}
+---
+
+FINALIZED EXPLANATION:
+---
+{explanation}
+---
+
+FINALIZED CHOICES:
+---
+{choices_text}
+---
+
+CORRECT ANSWER LETTER:
+{correct_letter}
+
+FINALIZED LONG DESCRIPTION HTML:
+---
+{new_long_description}
+---
+
+ORIGINAL GRAPH SPEC CONTEXT:
+{graph_spec_json}
+
+Metadata:
+- Category: {category}
+- Section: {section}
+- Difficulty: {difficulty}
+
+Return ONLY the TikZ code block.
+"""
+
+
+def _build_prompt_tikz_from_free_response_context(
+    *,
+    question_text: str,
+    explanation: str,
+    correct_answer: str,
+    new_long_description: str,
+    graph_spec: Dict[str, Any],
+    category: str,
+    section: str,
+    difficulty: str,
+) -> str:
+    """Prompt chuyên biệt để sinh TikZ từ nội dung câu hỏi tự luận đã hoàn chỉnh."""
+    graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
+
+    return f"""You are a specialist TikZ figure generator for SAT math questions.
+
+Task: Generate ONLY the TikZ diagram for the finalized math figure below.
+
+You are NOT writing the question. The question, explanation, correct answer, and long description are already finalized.
+Your job is to analyze that content, determine what kind of figure is actually needed, and produce a professional TikZ rendering that matches it.
+
+PRIMARY GOAL:
+- Build a clean, readable figure that faithfully represents the finalized scenario.
+- Prioritize diagram quality, spacing, and label placement so elements do not overlap.
+- Use the long description as the authoritative source of the figure structure, labels, and numeric relationships.
+- Use the question/explanation/correct answer to understand what visual relationship must be clear.
+
+FIRST DECIDE THE FIGURE TYPE:
+Before drawing, infer which of these best matches the problem:
+1. Coordinate/data graph: line graph, bar chart, scatter-style plot, or data chart where axes are necessary.
+2. Geometry figure: triangle, quadrilateral, circle, angle, parallel lines with transversals, similar figures, or other Euclidean diagram.
+3. Algebra/other schematic: number line, function sketch without full chart scaffolding, labeled segments, or another simple mathematical schematic.
+
+CRITICAL AXIS RULE:
+- DO NOT draw x-axis and y-axis by default.
+- Draw axes ONLY if the problem is truly a coordinate/data graph and the axes are necessary to interpret the figure.
+- For geometry diagrams, angle diagrams, triangles, parallel lines, transversals, labeled segments, and not-to-scale illustrations, do NOT add coordinate axes.
+- If the sample/problem is a pure geometry figure like a right triangle or two parallel lines with an angle, draw only the needed geometric objects and labels.
+
+FIGURE-SPECIFIC DRAWING RULES:
+- If it is a coordinate/data graph:
+  - Use manual axes with \\draw[->].
+    - Normalize x coordinates to integers in 0..10 only.
+    - IMPORTANT: Do NOT use raw data values directly as y coordinates.
+    - Use approximate visual scaling only: map plotted y coordinates to a compact display band (recommended y in 2..8).
+    - Preserve order/trend and relative differences qualitatively, not exact numeric ratio.
+    - Show actual numeric values as labels near points/bars when needed for fidelity.
+  - Keep labels compact and readable.
+    - ANTI-ANSWER-LEAKAGE STYLING (MANDATORY):
+        - Do NOT highlight any data point/bar/segment that could reveal the answer.
+        - Use one uniform neutral style for all values in the same series (same color family, opacity, and line width).
+        - Never use a special color for max/min values, turning points, or the value tied to the correct option.
+        - Avoid attention cues on one value: no glow, bold-only emphasis, thicker stroke, unique marker, or unique fill on a single candidate.
+        - If multiple series are required, use balanced styling and a legend; color must encode series identity only, not correctness.
+- If it is a geometry figure:
+  - Choose coordinates freely to make the figure clean and well proportioned.
+  - Do not force x/y axes or graph framing.
+  - Preserve key relationships visually: parallel, perpendicular, equal length, acute/obtuse angle, intersection, right angle, etc.
+  - Add right-angle markers, angle arcs, tick marks, or segment labels only when they help express the intended math.
+  - If the problem is marked not to scale, the figure may be visually clean without exact metric proportionality, but it must still communicate the intended relationships.
+- If it is two parallel lines / angle-chasing:
+  - Draw two clearly parallel lines and the relevant transversal(s).
+  - Place angle labels away from intersections so they do not collide with lines.
+  - Make the relevant corresponding, alternate interior, vertical, or supplementary relationships visually obvious.
+
+TIKZ CODE REQUIREMENTS:
+- Return ONLY a single \\begin{{tikzpicture}} ... \\end{{tikzpicture}} block.
+- DO NOT output JSON, markdown, commentary, or any text outside the tikzpicture block.
+- DO NOT use pgfplots commands or environments: \\begin{{axis}}, \\addplot, xtick, xticklabels, xmin/xmax, ymin/ymax, grid=both.
+- Start with exactly: \\begin{{tikzpicture}}[line cap=round,line join=round]
+
+LAYOUT + QUALITY RULES:
+1. Coordinate bounds must satisfy abs(x) <= 12 and abs(y) <= 30.
+2. Scale and position the figure to fill the canvas well without crowding the edges.
+3. Use only the shapes needed for the math. Do not add redundant axes, grids, or decorations.
+4. Keep labels outside strokes whenever possible.
+5. If a label would overlap a segment, point, or angle marker, move it with a small offset.
+6. For triangles and polygons, keep vertices separated enough that side labels and angle markers fit cleanly.
+7. For angle diagrams, keep intersections uncluttered and use small arcs or labels that are easy to read.
+8. For charts, ensure tick labels and axis titles do not collide with data points or each other.
+9. Avoid dense loops, unnecessary shading, or complex ornamentation that could hurt compilation or readability.
+10. Self-check before final output: if the chosen figure type is wrong, if axes are unnecessary, if labels overlap, or if any coordinate breaks limits, regenerate the TikZ.
+11. For data graphs, keep the overall chart visually compact: target plotted height around 5-7 TikZ units (never full-range raw-value height).
+12. For bar charts, bars should fit comfortably inside the frame with consistent top margin; do not let tallest bar touch the top border.
+13. Final fairness check: ensure styling alone cannot be used to guess the correct answer.
+
+FINALIZED QUESTION TEXT:
+---
+{question_text}
+---
+
+FINALIZED EXPLANATION:
+---
+{explanation}
+---
+
+FINALIZED CORRECT ANSWER:
+---
+{correct_answer}
+---
+
+FINALIZED LONG DESCRIPTION HTML:
+---
+{new_long_description}
+---
+
+ORIGINAL GRAPH SPEC CONTEXT:
+{graph_spec_json}
+
+Metadata:
+- Category: {category}
+- Section: {section}
+- Difficulty: {difficulty}
+
+Return ONLY the TikZ code block.
 """
 
 
@@ -1087,10 +1100,10 @@ def _build_prompt_graph_free_response_freeform(
     section: str,
     difficulty: str,
 ) -> str:
-    """Free-form prompt for reasoning LLMs - graph free-response questions."""
+    """Free-form prompt for reasoning LLMs - text-only graph free-response questions."""
     long_desc_html = graph_spec.get("long_description_html", "")
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
-    
+
     # Add reasoning guidance for Medium/Hard questions
     reasoning_guidance = ""
     if difficulty.lower() in ["medium", "hard"]:
@@ -1101,17 +1114,17 @@ def _build_prompt_graph_free_response_freeform(
 - Avoid values that lead to awkward decimals or overly complex calculations
 - Make sure the data tells a coherent, interpretable story
 - Ensure calculations with the new data yield clean, reasonable results"""
-    
+
     return f"""You are an SAT question writer. This is a free-response question with a GRAPH.
 
-Task: Generate NEW numerical values for the graph and update all text accordingly.
+Task: Generate the finalized graph-aware text content first. Do NOT generate TikZ yet.
 
 IMPORTANT:
-- Generate NEW x_values and y_values for the graph
-- Update question text, explanation, and correct answer to match new data
+- Update question text, explanation, and correct answer to match the generated graph or figure scenario
 - Keep HTML and MathML structure EXACTLY as in sample
-- CRITICAL: Calculate the correct answer based on YOUR new data
-- Preserve the HTML structure of the long description (<ul><li>...</li></ul>){reasoning_guidance}
+- CRITICAL: Calculate the correct answer based on YOUR generated graph
+- Preserve the HTML structure of the long description (<ul><li>...</li></ul>)
+- Make the long description detailed enough that a separate TikZ generator can reconstruct the intended figure faithfully{reasoning_guidance}
 
 Original Graph Specification:
 {graph_spec_json}
@@ -1141,12 +1154,6 @@ EXPLANATION:
 CORRECT_ANSWER:
 [The correct answer in same format as sample]
 
-NEW_X_VALUES:
-[List of new x-axis values, e.g., 2015, 2016, 2017, 2018, 2019]
-
-NEW_Y_VALUES:
-[List of new y-axis values, e.g., 10.5, 15.2, 8.7, 12.3, 18.9]
-
 NEW_LONG_DESCRIPTION:
 [HTML description using <ul><li>...</li></ul> format with new values]
 """
@@ -1161,26 +1168,24 @@ def _build_prompt_graph_free_response(
     section: str,
     difficulty: str,
 ) -> str:
-    """Prompt cho câu hỏi tự luận có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
-    
+    """Prompt text-only cho câu hỏi tự luận có đồ thị: KHÔNG truyền SVG, chỉ truyền text + GraphSpec."""
+
     # Extract long_description_html for the prompt
     long_desc_html = graph_spec.get("long_description_html", "")
-    graph_type = graph_spec.get("graph_type", "unknown")
-    
     graph_spec_json = json.dumps(graph_spec, default=str, ensure_ascii=False, indent=2)
     return f"""You are an SAT question writer. This is a FREE-RESPONSE question with a GRAPH/CHART.
 
-Task: Generate new numerical values for the graph and update all related text accordingly.
+Task: Generate the graph-aware textual content first. Do NOT generate TikZ yet.
 
 IMPORTANT:
-- The question contains a graph (SVG and long description will be handled separately by code).
-- You must generate NEW x_values and y_values for the graph.
-- Update the question text, explanation, and correct answer to match the new graph data.
+- The question contains a graph or math figure (rendering will be handled separately by code).
+- Update the question text, explanation, correct answer, and long description so they all match the same generated figure.
 - Keep the same structure and wording, only change numbers.
-- CRITICAL: You MUST calculate the correct answer based on the NEW data.
+- CRITICAL: You MUST calculate the correct answer based on the generated figure.
 - The correct answer should match the format of the sample (e.g., if it's a number, provide a number; if it's HTML/MathML, provide HTML/MathML).
 - DO NOT include the long description (<ul><li>...) in question_text. It will be added separately to the figure block.
 - CRITICAL: The new_long_description MUST use the EXACT same HTML structure as the original (with <ul>, <li>, <br> tags). Only change the numbers.
+- The long description must contain enough detail for a separate TikZ generator to infer the correct figure type and layout.
 
 Original GraphSpec:
 {graph_spec_json}
@@ -1211,8 +1216,6 @@ Return a JSON object with:
 - question_text: new question text (without SVG, without long description, only numbers changed in the intro and question sentences)
 - explanation: new explanation (numbers changed to match new graph and correct answer)
 - correct_answer: the correct answer for the new question, in the same format as the sample
-- new_x_values: list of new x-axis values (e.g., [2015, 2016, 2017, ...])
-- new_y_values: list of new y-axis values (e.g., [10.0, 15.0, 8.0, ...])
 - new_long_description: new graph description in HTML format, MUST use the same <ul><li>...</li></ul> structure as the original, only changing the numbers
 
 You must output ONLY valid JSON.
@@ -1281,7 +1284,7 @@ def _build_prompt_freeform(
 - Verify the answer is achievable with the given numbers
 - Make sure intermediate calculations yield clean, reasonable results
 - Avoid numbers that lead to awkward decimals or irrational solutions"""
-        
+
         return f"""You are an SAT question writer. Generate a NEW free-response question that tests the SAME mathematical skill as the sample, but with a DIFFERENT scenario.
 
 Requirements:
@@ -1349,7 +1352,7 @@ def _build_prompt(
     q_type: str,
     difficulty: str,
     creative_mode: bool = True,
-) -> str:    
+) -> str:
     if creative_mode:
         return f"""You are an SAT question writer. Task: Generate a NEW question that tests the SAME mathematical skill/concept as the sample, but with a DIFFERENT scenario and context.
 
@@ -1508,7 +1511,9 @@ def _invoke_openai_basic_structured(
         # If nested values look like schema metadata blocks, treat as schema.
         schema_meta_hits = 0
         for value in props.values():
-            if isinstance(value, dict) and ({"type", "description", "title"} & set(value.keys())):
+            if isinstance(value, dict) and (
+                {"type", "description", "title"} & set(value.keys())
+            ):
                 schema_meta_hits += 1
         return schema_meta_hits == 0
 
@@ -1533,7 +1538,10 @@ def _invoke_openai_basic_structured(
         # Common schema/template shape returned by models: description/title/properties,
         # but no required payload fields like question/explanation.
         schemaish_keys = {"type", "properties", "required", "title", "description"}
-        if not _has_required_field(obj) and len(schemaish_keys.intersection(obj.keys())) >= 2:
+        if (
+            not _has_required_field(obj)
+            and len(schemaish_keys.intersection(obj.keys())) >= 2
+        ):
             return True
 
         return False
@@ -1551,17 +1559,26 @@ def _invoke_openai_basic_structured(
 
             # Common pattern from some models: payload nested under "properties".
             props = obj.get("properties")
-            if _properties_looks_like_payload(props):
+            if _properties_looks_like_payload(props) and isinstance(props, dict):
                 # Some responses split fields between outer object and properties payload.
-                merged = dict(props)
+                merged: Dict[str, Any] = dict(props)
                 for field_name in model_field_names:
                     if field_name in obj and field_name not in merged:
                         merged[field_name] = obj[field_name]
                 candidates.append(merged)
-                candidates.append(props)
+                candidates.append(dict(props))
 
             # Common wrapper keys returned by LLM tools/parsers.
-            for key in ("output", "result", "data", "json", "instance", "payload", "value", "response"):
+            for key in (
+                "output",
+                "result",
+                "data",
+                "json",
+                "instance",
+                "payload",
+                "value",
+                "response",
+            ):
                 nested = obj.get(key)
                 if isinstance(nested, dict):
                     candidates.append(nested)
@@ -1582,13 +1599,19 @@ def _invoke_openai_basic_structured(
         cleaned = (text or "").replace("\x00", " ")
         cleaned = re.sub(r"[\x01-\x08\x0B\x0C\x0E-\x1F]", " ", cleaned)
         # Replace invalid Unicode sequences conservatively.
-        cleaned = cleaned.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+        cleaned = cleaned.encode("utf-8", errors="replace").decode(
+            "utf-8", errors="replace"
+        )
         return cleaned
 
     client = OpenAI(api_key=api_key)
-    schema_json = json.dumps(output_schema.model_json_schema(), ensure_ascii=False, indent=2)
+    schema_json = json.dumps(
+        output_schema.model_json_schema(), ensure_ascii=False, indent=2
+    )
     required_list = ", ".join(sorted(required_fields)) if required_fields else "(none)"
-    minimal_skeleton = {k: "" for k in sorted(required_fields)} if required_fields else {}
+    minimal_skeleton = (
+        {k: "" for k in sorted(required_fields)} if required_fields else {}
+    )
     system_prompt = f"""You are an SAT question writer.
 
 Return ONE valid JSON object only, with no markdown and no extra text.
@@ -1660,12 +1683,16 @@ Rules:
             continue
 
         if _looks_like_schema_object(parsed):
-            last_error = "Model returned a JSON Schema object instead of a payload instance"
+            last_error = (
+                "Model returned a JSON Schema object instead of a payload instance"
+            )
             continue
 
         for candidate in _candidate_payloads(parsed):
             if _looks_like_schema_object(candidate):
-                last_error = "Model returned schema-like candidate instead of payload instance"
+                last_error = (
+                    "Model returned schema-like candidate instead of payload instance"
+                )
                 continue
 
             try:
@@ -1717,9 +1744,13 @@ def _validate_mc_instance(
     correct_letter: Optional[str],
 ) -> None:
     if choices is None or len(choices) != 4:
-        raise ValueError("Multiple-choice generated instance must have exactly 4 choices")
+        raise ValueError(
+            "Multiple-choice generated instance must have exactly 4 choices"
+        )
     if not correct_letter or correct_letter not in ("A", "B", "C", "D"):
-        raise ValueError("Multiple-choice generated instance must have correct_answer_letter in A/B/C/D")
+        raise ValueError(
+            "Multiple-choice generated instance must have correct_answer_letter in A/B/C/D"
+        )
 
 
 def _try_generate_structured_openai(
@@ -1754,13 +1785,17 @@ def _try_generate_structured_openai(
         "mode": "openai_basic" if use_openai_basic else "openai_structured",
     }
 
-    has_graph = graph_spec is not None and hasattr(graph_spec, "x_values") and bool(graph_spec.x_values)
+    has_graph = graph_spec is not None
     if has_graph:
         artifacts["status"] = "fallback"
         artifacts["reason"] = "graph_questions_use_legacy_generator"
         return None, artifacts
 
-    is_multiple_choice = q_type == "multiple-choice" and len(original_choices) == 4 and bool(correct_letter)
+    is_multiple_choice = (
+        q_type == "multiple-choice"
+        and len(original_choices) == 4
+        and bool(correct_letter)
+    )
     input_snapshot = _build_input_snapshot(
         sample,
         original_question_html=original_html,
@@ -1775,7 +1810,9 @@ def _try_generate_structured_openai(
     temp = 0.7 if creative_mode else 0.3
 
     try:
-        analysis_prompt = _build_problem_analysis_prompt(input_snapshot, step_b_trace=step_b_trace)
+        analysis_prompt = _build_problem_analysis_prompt(
+            input_snapshot, step_b_trace=step_b_trace
+        )
         analysis = _invoke_structured(
             prompt_text=analysis_prompt,
             output_schema=ProblemAnalysis,
@@ -1788,7 +1825,9 @@ def _try_generate_structured_openai(
         )
 
         # Force source_fields to match actual sample extraction and avoid model hallucinated source metadata.
-        analysis.source_fields = SourceMetadata.model_validate(input_snapshot.get("source_metadata") or {})
+        analysis.source_fields = SourceMetadata.model_validate(
+            input_snapshot.get("source_metadata") or {}
+        )
         artifacts["analysis"] = analysis.model_dump()
 
         blueprint_prompt = _build_problem_blueprint_prompt(input_snapshot, analysis)
@@ -1826,7 +1865,9 @@ def _try_generate_structured_openai(
         )
         artifacts["generated_instance"] = instance.model_dump()
 
-        verify_prompt = _build_structured_verification_prompt(input_snapshot, analysis, blueprint, instance)
+        verify_prompt = _build_structured_verification_prompt(
+            input_snapshot, analysis, blueprint, instance
+        )
         verification = _invoke_structured(
             prompt_text=verify_prompt,
             output_schema=GenerationVerificationReport,
@@ -1846,9 +1887,13 @@ def _try_generate_structured_openai(
 
         # Verification models can be overly strict; only hard-fail on confident negatives.
         if verification.is_solvable is False and verification.confidence >= 0.5:
-            raise ValueError("Structured verification failed (unsolvable, high confidence)")
+            raise ValueError(
+                "Structured verification failed (unsolvable, high confidence)"
+            )
         if verification.answer_format_valid is False and verification.confidence >= 0.7:
-            raise ValueError("Structured verification failed (answer format invalid, high confidence)")
+            raise ValueError(
+                "Structured verification failed (answer format invalid, high confidence)"
+            )
 
         if is_multiple_choice:
             new_choices = [str(c).strip() for c in (instance.choices or [])]
@@ -1859,7 +1904,9 @@ def _try_generate_structured_openai(
 
             unique_ok = verification.multiple_choice_unique_correct
             if unique_ok is False:
-                raise ValueError("Multiple-choice verification reports non-unique correct option")
+                raise ValueError(
+                    "Multiple-choice verification reports non-unique correct option"
+                )
 
             new_question_content = {
                 "paragraph": sample.get("question", {}).get("paragraph"),
@@ -1873,7 +1920,9 @@ def _try_generate_structured_openai(
             if verification.corrected_correct_answer:
                 effective_answer = verification.corrected_correct_answer
             if not effective_answer:
-                raise ValueError("Structured instance missing correct_answer for free response")
+                raise ValueError(
+                    "Structured instance missing correct_answer for free response"
+                )
 
             new_question_content = {
                 "paragraph": sample.get("question", {}).get("paragraph"),
@@ -1916,8 +1965,10 @@ def _build_prompt_multiple_choice_freeform(
     creative_mode: bool = True,
 ) -> str:
     """Free-form prompt for reasoning LLMs - focuses on content generation, not JSON structure."""
-    choices_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)])
-    
+    choices_text = "\n".join(
+        [f"{chr(65+i)}. {choice}" for i, choice in enumerate(original_choices)]
+    )
+
     if creative_mode:
         # For Medium/Hard: emphasis on reasoning and ensuring reasonable values
         reasoning_guidance = ""
@@ -1930,7 +1981,7 @@ def _build_prompt_multiple_choice_freeform(
 - Make sure intermediate calculations yield clean, reasonable results
 - Avoid numbers that lead to awkward decimals or irrational solutions
 - Create plausible distractors that represent common mistakes"""
-        
+
         return f"""You are an SAT question writer. Generate a NEW multiple-choice question that tests the SAME mathematical skill as the sample, but with a DIFFERENT scenario.
 
 Requirements:
@@ -2032,7 +2083,7 @@ def _build_prompt_multiple_choice(
     """Prompt cho multiple-choice: sinh question, explanation, 4 choices, và correct_answer_letter."""
     # Do not include "Choice A:/B:/..." prefixes — UI will display A/B/C/D
     choices_text = "\n".join(original_choices)
-    
+
     if creative_mode:
         return f"""You are an SAT question writer. This is a MULTIPLE-CHOICE question. Task: Generate a NEW question that tests the SAME mathematical skill/concept as the sample, but with a DIFFERENT scenario and context.
 
@@ -2127,7 +2178,6 @@ Return ONLY the JSON object.
 """
 
 
-
 def generate_new_question(
     sample: Dict[str, Any],
     llm: Optional[ChatOpenAI] = None,
@@ -2158,20 +2208,26 @@ def generate_new_question(
     # Determine difficulty level and auto-set creative_mode if not specified
     difficulty = sample.get("difficulty", "Easy").lower()
     debug_stage_c = True
-    
+
     if creative_mode is None:
         # Strategy based on difficulty:
         # - Easy: only change numbers (conservative mode)
         # - Medium/Hard: use reasoning to ensure logical consistency (creative mode)
         if difficulty == "easy":
             creative_mode = False
-            print(f"📘 Difficulty: {difficulty.upper()} → Strategy: Conservative (only change numbers)")
+            print(
+                f"📘 Difficulty: {difficulty.upper()} → Strategy: Conservative (only change numbers)"
+            )
         else:  # medium or hard
             creative_mode = True
-            print(f"📗 Difficulty: {difficulty.upper()} → Strategy: Reasoning (ensure logical consistency and reasonable values)")
+            print(
+                f"📗 Difficulty: {difficulty.upper()} → Strategy: Reasoning (ensure logical consistency and reasonable values)"
+            )
     else:
         mode_text = "creative" if creative_mode else "conservative"
-        print(f"📙 Difficulty: {difficulty.upper()} → Strategy: {mode_text.upper()} (manually set)")
+        print(
+            f"📙 Difficulty: {difficulty.upper()} → Strategy: {mode_text.upper()} (manually set)"
+        )
 
     openai_key = api_key or os.getenv("OPENAI_API_KEY")
     generation_temp = 0.7 if creative_mode else 0.3
@@ -2182,7 +2238,9 @@ def generate_new_question(
     if llm is None and not use_openai_basic:
         # Use OpenAI model
         if not openai_key:
-            raise ValueError("Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key.")
+            raise ValueError(
+                "Cần đặt OPENAI_API_KEY trong môi trường hoặc truyền api_key."
+            )
 
         llm_kwargs: Dict[str, Any] = {
             "model": model,
@@ -2203,7 +2261,7 @@ def generate_new_question(
     difficulty = sample.get("difficulty", "Easy")
 
     original_html = _get_question_html(sample)
-    
+
     parser = MathMLParser()
     parsed = parser.parse(original_html)
     graph_spec = parsed.get("graph")
@@ -2213,8 +2271,13 @@ def generate_new_question(
     original_explanation = _get_explanation(sample)
     original_choices = _get_choices(sample)
     correct_letter = _get_correct_answer_letter(sample)
-    original_correct_answer = _get_correct_answer_content(sample)    
-    is_multiple_choice = (q_type == "multiple-choice") and len(original_choices) == 4 and correct_letter and original_explanation
+    original_correct_answer = _get_correct_answer_content(sample)
+    is_multiple_choice = (
+        (q_type == "multiple-choice")
+        and len(original_choices) == 4
+        and correct_letter
+        and original_explanation
+    )
     generate_full = bool(original_explanation and original_correct_answer)
 
     # Structured OpenAI pipeline for non-graph math questions.
@@ -2246,35 +2309,35 @@ def generate_new_question(
 
         reason = (structured_artifacts or {}).get("reason", "unknown")
         # Fail fast for validator high-confidence failures so UI can surface model-stuck cases.
-        if isinstance(reason, str) and reason.startswith("Structured verification failed"):
+        if isinstance(reason, str) and reason.startswith(
+            "Structured verification failed"
+        ):
             raise RuntimeError(reason)
         print(f"⚠ Structured pipeline fallback to legacy generator: {reason}")
 
     if is_multiple_choice:
-        if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
+        if graph_spec is not None:
             # ========== LUỒNG XỬ LÝ CÂU HỎI CÓ ĐỒ THỊ ==========
             # Loại bỏ SVG và long description khỏi HTML để giảm token
             # Long description sẽ được xử lý riêng và chèn vào figure block
             question_text_no_svg = _remove_svg_and_long_desc_from_html(original_html)
 
             print("Question text without SVG:", question_text_no_svg)
-            
+
             # Convert GraphSpec to dict for JSON serialization
             graph_spec_dict = {
-                "graph_type": graph_spec.graph_type,
-                "x_label": graph_spec.x_label,
-                "y_label": graph_spec.y_label,
-                "x_values": graph_spec.x_values,
-                "y_values": graph_spec.y_values,
-                "y_unit": graph_spec.y_unit,
-                "raw_long_description": graph_spec.raw_long_description,
-                "long_description_html": graph_spec.long_description_html,
+                "x_label": getattr(graph_spec, "x_label", ""),
+                "y_label": getattr(graph_spec, "y_label", ""),
+                "raw_long_description": getattr(graph_spec, "raw_long_description", ""),
+                "long_description_html": getattr(
+                    graph_spec, "long_description_html", ""
+                ),
             }
-            
+
             # Dùng prompt riêng cho câu hỏi có đồ thị
             if not correct_letter:
                 raise ValueError("Multiple-choice question requires correct_letter")
-            
+
             prompt_text = _build_prompt_graph_multiple_choice(
                 question_text_no_svg,
                 original_explanation,
@@ -2285,7 +2348,7 @@ def generate_new_question(
                 section,
                 difficulty,
             )
-            
+
             if use_openai_basic:
                 freeform_prompt = _build_prompt_graph_multiple_choice_freeform(
                     question_text_no_svg,
@@ -2297,9 +2360,9 @@ def generate_new_question(
                     section,
                     difficulty,
                 )
-                result_graph = _invoke_openai_basic_structured(
+                result_graph_text = _invoke_openai_basic_structured(
                     prompt_text=freeform_prompt,
-                    output_schema=GeneratedGraphQuestionContent,
+                    output_schema=GeneratedGraphQuestionTextContent,
                     api_key=openai_key or "",
                     model=model,
                     temperature=generation_temp,
@@ -2307,103 +2370,81 @@ def generate_new_question(
                 )
             else:
                 if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
-                structured_llm = llm.with_structured_output(GeneratedGraphQuestionContent)
-                result_graph: GeneratedGraphQuestionContent = structured_llm.invoke(  # type: ignore
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
+                structured_llm = llm.with_structured_output(
+                    GeneratedGraphQuestionTextContent
+                )
+                result_graph_text: GeneratedGraphQuestionTextContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
-            
+
             # Validate kết quả
-            new_choices = result_graph.choices or []
+            new_choices = result_graph_text.choices or []
             if len(new_choices) != 4:
-                raise ValueError(f"LLM phải trả về đúng 4 choices, nhận được {len(new_choices)}.")
+                raise ValueError(
+                    f"LLM phải trả về đúng 4 choices, nhận được {len(new_choices)}."
+                )
             new_choices = [str(c).strip() for c in new_choices[:4]]
-            new_letter = (result_graph.correct_answer_letter or "").strip().upper()
+            new_letter = (result_graph_text.correct_answer_letter or "").strip().upper()
             if new_letter not in ("A", "B", "C", "D"):
-                raise ValueError(f"correct_answer_letter phải là A, B, C hoặc D, nhận được: {result_graph.correct_answer_letter!r}")
-            
-            new_question_text_no_svg = (result_graph.question_text or "").strip()
-            new_explanation = (result_graph.explanation or "").strip()
-            
+                raise ValueError(
+                    f"correct_answer_letter phải là A, B, C hoặc D, nhận được: {result_graph_text.correct_answer_letter!r}"
+                )
+
+            new_question_text_no_svg = (result_graph_text.question_text or "").strip()
+            new_explanation = (result_graph_text.explanation or "").strip()
+            new_long_description = (result_graph_text.new_long_description or "").strip()
+
             if not new_question_text_no_svg:
                 raise ValueError("LLM không trả về nội dung câu hỏi.")
             if not new_explanation:
                 raise ValueError("LLM không trả về explanation.")
-            
-            # VERIFY CORRECT ANSWER based on graph data
-            verified_letter = _verify_graph_correct_answer(
-                new_question_text_no_svg,
-                new_choices,
-                result_graph.new_x_values,
-                result_graph.new_y_values,
-                new_letter,
+            if not new_long_description:
+                raise ValueError("LLM không trả về new_long_description.")
+
+            tikz_prompt = _build_prompt_tikz_from_graph_context(
+                question_text=new_question_text_no_svg,
+                explanation=new_explanation,
+                choices=new_choices,
+                correct_letter=new_letter,
+                new_long_description=new_long_description,
+                graph_spec=graph_spec_dict,
+                category=category,
+                section=section,
+                difficulty=difficulty,
             )
-            
-            if verified_letter != new_letter:
-                print(f"⚠️  WARNING: LLM returned correct_answer_letter={new_letter}, but based on graph data, the correct answer should be {verified_letter}")
-                print(f"   Question asks for: {new_question_text_no_svg[:100]}...")
-                print(f"   Auto-correcting to: {verified_letter}")
-                
-                # Update explanation to match corrected answer
-                new_explanation = _update_explanation_for_corrected_answer(
-                    new_explanation,
-                    new_letter,
-                    verified_letter,
-                    new_choices,
+
+            if use_openai_basic:
+                result_tikz = _invoke_openai_basic_structured(
+                    prompt_text=tikz_prompt,
+                    output_schema=GeneratedTikzDiagramContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=max(0.0, min(generation_temp, 0.3)),
+                    debug_stage_c=debug_stage_c,
                 )
-                
-                new_letter = verified_letter
-            
-            # Tạo SVG mới bằng matplotlib và cập nhật long description
-            updated_html_with_svg = _update_graph_in_html(
-                original_html,
-                old_x_values=graph_spec.x_values,
-                old_y_values=graph_spec.y_values,
-                new_x_values=result_graph.new_x_values,
-                new_y_values=result_graph.new_y_values,
-                new_long_description=result_graph.new_long_description,
-                x_label=graph_spec.x_label or "Model year",
-                y_label=graph_spec.y_label or "Percent",
-                y_unit=graph_spec.y_unit or "%",
-                graph_type=graph_spec.graph_type or "line",
-            )
-            
-            # Trích xuất figure block (SVG + long_description) từ HTML đã cập nhật
-            # Pattern: <figure...>...<svg>...</svg>...<div class="sr-only">...</div>...</figure>
-            figure_match = re.search(
-                r"<figure[^>]*>.*?</figure>",
-                updated_html_with_svg,
-                flags=re.DOTALL | re.IGNORECASE
-            )
-            
-            if figure_match:
-                figure_block = figure_match.group(0)
-                # Ghép: text_intro (trước câu hỏi chính) + figure + text_question (câu hỏi chính)
-                # Giả sử new_question_text_no_svg có format: "<p>intro...</p>\n<p>question...</p>"
-                # Chèn figure vào giữa
-                
-                # Loại bỏ long description từ LLM output (nếu có) để tránh trùng lặp
-                # vì figure_block đã chứa long description
-                clean_question_text = _remove_svg_and_long_desc_from_html(new_question_text_no_svg)
-                
-                # Tách text thành 2 phần: intro (mô tả đồ thị) và question (câu hỏi)
-                # Tìm câu hỏi cuối cùng (thường bắt đầu bằng "For what..." hoặc kết thúc bằng "?")
-                parts = re.split(r'(<p[^>]*>.*?</p>)', clean_question_text, flags=re.DOTALL)
-                parts = [p for p in parts if p.strip()]  # Loại bỏ empty strings
-                
-                if len(parts) >= 2:
-                    # Giả sử phần cuối là câu hỏi
-                    intro_parts = parts[:-1]
-                    question_part = parts[-1]
-                    intro_text = ''.join(intro_parts)
-                    new_question_text = f'{intro_text}\n<p style="text-align: center;">{figure_block}</p>\n{question_part}'
-                else:
-                    # Nếu chỉ có 1 phần, đặt figure ở đầu
-                    new_question_text = f'<p style="text-align: center;">{figure_block}</p>\n{clean_question_text}'
             else:
-                # Fallback: chỉ dùng text không có SVG
-                new_question_text = new_question_text_no_svg
-            
+                if llm is None:
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
+                tikz_llm = llm.with_structured_output(GeneratedTikzDiagramContent)
+                result_tikz: GeneratedTikzDiagramContent = tikz_llm.invoke(  # type: ignore
+                    [HumanMessage(content=tikz_prompt)]
+                )
+
+            if not (result_tikz.tikz_code or "").strip():
+                raise ValueError("LLM không trả về tikz_code.")
+
+            # Render graph through tikz_compiler service and inject to question HTML.
+            new_question_text = build_question_with_tikz_figure(
+                question_text_html=new_question_text_no_svg,
+                tikz_code=result_tikz.tikz_code,
+                long_description_html=new_long_description,
+            )
+
             new_question_content = {
                 "paragraph": sample.get("question", {}).get("paragraph"),
                 "question": new_question_text,
@@ -2414,7 +2455,7 @@ def generate_new_question(
         else:
             if not correct_letter:
                 raise ValueError("Multiple-choice question requires correct_letter")
-            
+
             prompt_text = _build_prompt_multiple_choice(
                 original_html,
                 original_explanation,
@@ -2446,8 +2487,12 @@ def generate_new_question(
                 )
             else:
                 if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
-                structured_llm = llm.with_structured_output(GeneratedMultipleChoiceContent)
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
+                structured_llm = llm.with_structured_output(
+                    GeneratedMultipleChoiceContent
+                )
                 result_mc: GeneratedMultipleChoiceContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
@@ -2455,11 +2500,15 @@ def generate_new_question(
             new_explanation = (result_mc.explanation or "").strip()
             new_choices = result_mc.choices or []
             if len(new_choices) != 4:
-                raise ValueError(f"LLM phải trả về đúng 4 choices, nhận được {len(new_choices)}.")
+                raise ValueError(
+                    f"LLM phải trả về đúng 4 choices, nhận được {len(new_choices)}."
+                )
             new_choices = [str(c).strip() for c in new_choices[:4]]
             new_letter = (result_mc.correct_answer_letter or "").strip().upper()
             if new_letter not in ("A", "B", "C", "D"):
-                raise ValueError(f"correct_answer_letter phải là A, B, C hoặc D, nhận được: {result_mc.correct_answer_letter!r}")
+                raise ValueError(
+                    f"correct_answer_letter phải là A, B, C hoặc D, nhận được: {result_mc.correct_answer_letter!r}"
+                )
             if not new_question_text:
                 raise ValueError("LLM không trả về nội dung câu hỏi.")
             if not new_explanation:
@@ -2475,25 +2524,23 @@ def generate_new_question(
     elif generate_full:
         # Không phải multiple-choice hoặc thiếu 4 choices: sinh question, explanation, correct_answer (nội dung)
         # Kiểm tra nếu câu hỏi có đồ thị → dùng luồng xử lý riêng (không truyền SVG vào prompt)
-        if graph_spec is not None and hasattr(graph_spec, 'x_values') and graph_spec.x_values:
+        if graph_spec is not None:
             # ========== LUỒNG XỬ LÝ CÂU HỎI TỰ LUẬN CÓ ĐỒ THỊ ==========
             # Loại bỏ SVG và long description khỏi HTML để giảm token
             question_text_no_svg = _remove_svg_and_long_desc_from_html(original_html)
 
             print("Free-response question text without SVG:", question_text_no_svg)
-            
+
             # Convert GraphSpec to dict for JSON serialization
             graph_spec_dict = {
-                "graph_type": graph_spec.graph_type,
-                "x_label": graph_spec.x_label,
-                "y_label": graph_spec.y_label,
-                "x_values": graph_spec.x_values,
-                "y_values": graph_spec.y_values,
-                "y_unit": graph_spec.y_unit,
-                "raw_long_description": graph_spec.raw_long_description,
-                "long_description_html": graph_spec.long_description_html,
+                "x_label": getattr(graph_spec, "x_label", ""),
+                "y_label": getattr(graph_spec, "y_label", ""),
+                "raw_long_description": getattr(graph_spec, "raw_long_description", ""),
+                "long_description_html": getattr(
+                    graph_spec, "long_description_html", ""
+                ),
             }
-            
+
             # Dùng prompt riêng cho câu hỏi tự luận có đồ thị
             prompt_text = _build_prompt_graph_free_response(
                 question_text_no_svg,
@@ -2504,7 +2551,7 @@ def generate_new_question(
                 section,
                 difficulty,
             )
-            
+
             if use_openai_basic:
                 freeform_prompt = _build_prompt_graph_free_response_freeform(
                     question_text_no_svg,
@@ -2515,9 +2562,9 @@ def generate_new_question(
                     section,
                     difficulty,
                 )
-                result_free_response = _invoke_openai_basic_structured(
+                result_free_response_text = _invoke_openai_basic_structured(
                     prompt_text=freeform_prompt,
-                    output_schema=GeneratedGraphFreeResponseContent,
+                    output_schema=GeneratedGraphFreeResponseTextContent,
                     api_key=openai_key or "",
                     model=model,
                     temperature=generation_temp,
@@ -2525,67 +2572,74 @@ def generate_new_question(
                 )
             else:
                 if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
-                structured_llm = llm.with_structured_output(GeneratedGraphFreeResponseContent)
-                result_free_response: GeneratedGraphFreeResponseContent = structured_llm.invoke(  # type: ignore
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
+                structured_llm = llm.with_structured_output(
+                    GeneratedGraphFreeResponseTextContent
+                )
+                result_free_response_text: GeneratedGraphFreeResponseTextContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
                 )
-            
+
             # Validate kết quả
-            new_question_text_no_svg = (result_free_response.question_text or "").strip()
-            new_explanation = (result_free_response.explanation or "").strip()
-            new_correct_answer = (result_free_response.correct_answer or "").strip()
-            
+            new_question_text_no_svg = (
+                result_free_response_text.question_text or ""
+            ).strip()
+            new_explanation = (result_free_response_text.explanation or "").strip()
+            new_correct_answer = (result_free_response_text.correct_answer or "").strip()
+            new_long_description = (
+                result_free_response_text.new_long_description or ""
+            ).strip()
+
             if not new_question_text_no_svg:
                 raise ValueError("LLM không trả về nội dung câu hỏi.")
             if not new_explanation:
                 raise ValueError("LLM không trả về explanation.")
             if not new_correct_answer:
                 raise ValueError("LLM không trả về correct_answer.")
-            
-            # Tạo SVG mới bằng matplotlib và cập nhật long description
-            updated_html_with_svg = _update_graph_in_html(
-                original_html,
-                old_x_values=graph_spec.x_values,
-                old_y_values=graph_spec.y_values,
-                new_x_values=result_free_response.new_x_values,
-                new_y_values=result_free_response.new_y_values,
-                new_long_description=result_free_response.new_long_description,
-                x_label=graph_spec.x_label or "Model year",
-                y_label=graph_spec.y_label or "Percent",
-                y_unit=graph_spec.y_unit or "%",
-                graph_type=graph_spec.graph_type or "line",
+            if not new_long_description:
+                raise ValueError("LLM không trả về new_long_description.")
+
+            tikz_prompt = _build_prompt_tikz_from_free_response_context(
+                question_text=new_question_text_no_svg,
+                explanation=new_explanation,
+                correct_answer=new_correct_answer,
+                new_long_description=new_long_description,
+                graph_spec=graph_spec_dict,
+                category=category,
+                section=section,
+                difficulty=difficulty,
             )
-            
-            # Trích xuất figure block (SVG + long_description) từ HTML đã cập nhật
-            figure_match = re.search(
-                r"<figure[^>]*>.*?</figure>",
-                updated_html_with_svg,
-                flags=re.DOTALL | re.IGNORECASE
-            )
-            
-            if figure_match:
-                figure_block = figure_match.group(0)
-                
-                # Loại bỏ long description từ LLM output (nếu có) để tránh trùng lặp
-                clean_question_text = _remove_svg_and_long_desc_from_html(new_question_text_no_svg)
-                
-                # Tách text thành 2 phần: intro (mô tả đồ thị) và question (câu hỏi)
-                parts = re.split(r'(<p[^>]*>.*?</p>)', clean_question_text, flags=re.DOTALL)
-                parts = [p for p in parts if p.strip()]  # Loại bỏ empty strings
-                
-                if len(parts) >= 2:
-                    # Giả sử phần cuối là câu hỏi
-                    intro_parts = parts[:-1]
-                    question_part = parts[-1]
-                    intro_text = ''.join(intro_parts)
-                    new_question_text = f'{intro_text}\n<p style="text-align: center;">{figure_block}</p>\n{question_part}'
-                else:
-                    # Nếu chỉ có 1 phần, đặt figure ở đầu
-                    new_question_text = f'<p style="text-align: center;">{figure_block}</p>\n{clean_question_text}'
+
+            if use_openai_basic:
+                result_tikz = _invoke_openai_basic_structured(
+                    prompt_text=tikz_prompt,
+                    output_schema=GeneratedTikzDiagramContent,
+                    api_key=openai_key or "",
+                    model=model,
+                    temperature=max(0.0, min(generation_temp, 0.3)),
+                    debug_stage_c=debug_stage_c,
+                )
             else:
-                new_question_text = new_question_text_no_svg
-            
+                if llm is None:
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
+                tikz_llm = llm.with_structured_output(GeneratedTikzDiagramContent)
+                result_tikz: GeneratedTikzDiagramContent = tikz_llm.invoke(  # type: ignore
+                    [HumanMessage(content=tikz_prompt)]
+                )
+
+            if not (result_tikz.tikz_code or "").strip():
+                raise ValueError("LLM không trả về tikz_code.")
+
+            new_question_text = build_question_with_tikz_figure(
+                question_text_html=new_question_text_no_svg,
+                tikz_code=result_tikz.tikz_code,
+                long_description_html=new_long_description,
+            )
+
             new_question_content = {
                 "paragraph": sample.get("question", {}).get("paragraph"),
                 "question": new_question_text,
@@ -2626,7 +2680,9 @@ def generate_new_question(
                 )
             else:
                 if llm is None:
-                    raise ValueError("LLM chưa được khởi tạo cho structured-output mode")
+                    raise ValueError(
+                        "LLM chưa được khởi tạo cho structured-output mode"
+                    )
                 structured_llm = llm.with_structured_output(GeneratedQuestionContent)
                 result: GeneratedQuestionContent = structured_llm.invoke(  # type: ignore
                     [HumanMessage(content=prompt_text)]
@@ -2650,7 +2706,9 @@ def generate_new_question(
     else:
         # Chỉ có question mẫu, không có explanation/correct_answer → chỉ sinh câu hỏi (tương thích cũ)
         class QuestionOnly(BaseModel):
-            question: str = Field(description="New question content with proper HTML+MathML")
+            question: str = Field(
+                description="New question content with proper HTML+MathML"
+            )
 
         if use_openai_basic:
             freeform_prompt = f"""You are an SAT question writer. Change ONLY the numerical values in this question. Keep ALL HTML tags and MathML structure identical.
@@ -2684,8 +2742,8 @@ Sample:
 
 Return only the new question string (same format, numbers changed)."""
             res = QuestionOnlyModel.invoke([HumanMessage(content=prompt_question_only)])
-        
-        new_question_text = (res.question or "").strip() if hasattr(res, 'question') else str(res).strip()  # type: ignore
+
+        new_question_text = (res.question or "").strip() if hasattr(res, "question") else str(res).strip()  # type: ignore
         if not new_question_text:
             raise ValueError("LLM không trả về nội dung câu hỏi.")
         new_question_content = {
@@ -2775,9 +2833,9 @@ def main(sample_question: str, count: int = 1, output_path: Optional[str] = None
 if __name__ == "__main__":
     with open("graph.json", "r", encoding="utf-8") as f:
         graph_data = json.load(f)
-    
+
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.0)
     new_q = generate_new_question(graph_data, llm=llm)  # Truyền full object
-    
+
     with open("new_question.json", "w", encoding="utf-8") as f:
         json.dump(new_q, f, ensure_ascii=False, indent=2)

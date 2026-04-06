@@ -11,7 +11,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Generator
 
-from flask import Flask, request, jsonify, render_template, Response, stream_with_context
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    render_template,
+    Response,
+    stream_with_context,
+)
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -118,26 +125,32 @@ def get_question(question_id: str):
     correct_answer_raw = q_block.get("correct_answer") or sample.get("correct_answer")
     correct_answer_display = preprocess_correct_answer(sample)
 
-
-
-    return jsonify({
-        "id": sample.get("id"),
-        "subject": sample.get("subject"),
-        "section": sample.get("section"),
-        "category": sample.get("category"),
-        "difficulty": sample.get("difficulty"),
-        "type": sample.get("type"),
-        "paragraph_html": (q_block.get("paragraph") or "").strip(),  # Thêm dòng này
-        "question_html": _normalize_math_html((q_block.get("question") or "").strip()),
-        "explanation_html": (q_block.get("explanation") or "").strip(),
-        "correct_answer_letter": (
-            correct_answer_raw[0]
-            if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
-            else correct_answer_raw
-        ),
-        "correct_answer_html": correct_answer_display if isinstance(correct_answer_display, str) else str(correct_answer_display),
-        "choices": q_block.get("choices"),
-    })
+    return jsonify(
+        {
+            "id": sample.get("id"),
+            "subject": sample.get("subject"),
+            "section": sample.get("section"),
+            "category": sample.get("category"),
+            "difficulty": sample.get("difficulty"),
+            "type": sample.get("type"),
+            "paragraph_html": (q_block.get("paragraph") or "").strip(),  # Thêm dòng này
+            "question_html": _normalize_math_html(
+                (q_block.get("question") or "").strip()
+            ),
+            "explanation_html": (q_block.get("explanation") or "").strip(),
+            "correct_answer_letter": (
+                correct_answer_raw[0]
+                if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
+                else correct_answer_raw
+            ),
+            "correct_answer_html": (
+                correct_answer_display
+                if isinstance(correct_answer_display, str)
+                else str(correct_answer_display)
+            ),
+            "choices": q_block.get("choices"),
+        }
+    )
 
 
 @app.route("/api/run-flow", methods=["POST"])
@@ -175,29 +188,53 @@ def api_run_flow():
     choices = new_q_block.get("choices") or []
     correct_answer_raw = new_q_block.get("correct_answer")
     # Multiple-choice: correct_answer là ["C"] → lấy nội dung từ choices[index]
-    if choices and isinstance(correct_answer_raw, (list, tuple)) and len(correct_answer_raw) > 0:
+    if (
+        choices
+        and isinstance(correct_answer_raw, (list, tuple))
+        and len(correct_answer_raw) > 0
+    ):
         letter = (correct_answer_raw[0] or "").strip().upper()
         idx = {"A": 0, "B": 1, "C": 2, "D": 3}.get(letter)
-        new_correct_answer_html = _normalize_math_html((choices[idx] or "").strip()) if idx is not None and idx < len(choices) else ""
+        new_correct_answer_html = (
+            _normalize_math_html((choices[idx] or "").strip())
+            if idx is not None and idx < len(choices)
+            else ""
+        )
     elif isinstance(correct_answer_raw, str):
         new_correct_answer_html = _normalize_math_html(correct_answer_raw.strip())
     else:
         new_correct_answer_html = ""
     # Chuẩn hóa choices cho frontend (HTML từng option)
-    new_choices_html = [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
+    new_choices_html = (
+        [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
+    )
     # Lấy paragraph nếu có (có thể chứa graph)
-    new_paragraph_html = _normalize_math_html((new_q_block.get("paragraph") or "").strip())
+    new_paragraph_html = _normalize_math_html(
+        (new_q_block.get("paragraph") or "").strip()
+    )
     out = {
         "steps_json_path": result.get("steps_json_path"),
         "mode": mode_cfg,
         "step_b_trace": result.get("step_b_trace"),
-        "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
+        "new_question_text": _normalize_math_html(
+            result.get("new_question_text") or ""
+        ),
         "new_question_item": new_item,
         "new_paragraph_html": new_paragraph_html,
-        "new_explanation_html": _normalize_math_html((new_q_block.get("explanation") or "").strip()),
+        "new_explanation_html": _normalize_math_html(
+            (new_q_block.get("explanation") or "").strip()
+        ),
         "new_correct_answer_html": new_correct_answer_html,
         "new_choices_html": new_choices_html,
-        "new_correct_answer_letter": (correct_answer_raw[0] if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw else correct_answer_raw) if correct_answer_raw else None,
+        "new_correct_answer_letter": (
+            (
+                correct_answer_raw[0]
+                if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
+                else correct_answer_raw
+            )
+            if correct_answer_raw
+            else None
+        ),
         "answer_result": None,
         "error": result.get("error"),
     }
@@ -213,7 +250,9 @@ def api_run_flow():
     # So sánh đáp án C vs D bằng LLM
     answer_from_c = ""
     if choices and isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw:
-        idx = {"A": 0, "B": 1, "C": 2, "D": 3}.get((correct_answer_raw[0] or "").strip().upper())
+        idx = {"A": 0, "B": 1, "C": 2, "D": 3}.get(
+            (correct_answer_raw[0] or "").strip().upper()
+        )
         if idx is not None and idx < len(choices):
             answer_from_c = (choices[idx] or "").strip()
     elif isinstance(correct_answer_raw, str):
@@ -233,31 +272,51 @@ def _format_flow_result(result: dict) -> dict:
     choices = new_q_block.get("choices") or []
     correct_answer_raw = new_q_block.get("correct_answer")
 
-    if choices and isinstance(correct_answer_raw, (list, tuple)) and len(correct_answer_raw) > 0:
+    if (
+        choices
+        and isinstance(correct_answer_raw, (list, tuple))
+        and len(correct_answer_raw) > 0
+    ):
         letter = (correct_answer_raw[0] or "").strip().upper()
         idx = {"A": 0, "B": 1, "C": 2, "D": 3}.get(letter)
-        new_correct_answer_html = _normalize_math_html((choices[idx] or "").strip()) if idx is not None and idx < len(choices) else ""
+        new_correct_answer_html = (
+            _normalize_math_html((choices[idx] or "").strip())
+            if idx is not None and idx < len(choices)
+            else ""
+        )
     elif isinstance(correct_answer_raw, str):
         new_correct_answer_html = _normalize_math_html(correct_answer_raw.strip())
     else:
         new_correct_answer_html = ""
 
-    new_choices_html = [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
-    new_paragraph_html = _normalize_math_html((new_q_block.get("paragraph") or "").strip())
+    new_choices_html = (
+        [_normalize_math_html((c or "").strip()) for c in choices] if choices else []
+    )
+    new_paragraph_html = _normalize_math_html(
+        (new_q_block.get("paragraph") or "").strip()
+    )
 
     out = {
-        "new_question_text": _normalize_math_html(result.get("new_question_text") or ""),
+        "new_question_text": _normalize_math_html(
+            result.get("new_question_text") or ""
+        ),
         "new_question_item": new_item,
         "step_b_trace": result.get("step_b_trace"),
         "new_paragraph_html": new_paragraph_html,
-        "new_explanation_html": _normalize_math_html((new_q_block.get("explanation") or "").strip()),
+        "new_explanation_html": _normalize_math_html(
+            (new_q_block.get("explanation") or "").strip()
+        ),
         "new_correct_answer_html": new_correct_answer_html,
         "new_choices_html": new_choices_html,
         "new_correct_answer_letter": (
-            correct_answer_raw[0]
-            if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
-            else correct_answer_raw
-        ) if correct_answer_raw else None,
+            (
+                correct_answer_raw[0]
+                if isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw
+                else correct_answer_raw
+            )
+            if correct_answer_raw
+            else None
+        ),
         "answer_result": None,
         "error": result.get("error"),
         "answers_match": None,
@@ -273,8 +332,14 @@ def _format_flow_result(result: dict) -> dict:
         }
         # Compare C vs D answers
         answer_from_c = ""
-        if choices and isinstance(correct_answer_raw, (list, tuple)) and correct_answer_raw:
-            idx2 = {"A": 0, "B": 1, "C": 2, "D": 3}.get((correct_answer_raw[0] or "").strip().upper())
+        if (
+            choices
+            and isinstance(correct_answer_raw, (list, tuple))
+            and correct_answer_raw
+        ):
+            idx2 = {"A": 0, "B": 1, "C": 2, "D": 3}.get(
+                (correct_answer_raw[0] or "").strip().upper()
+            )
             if idx2 is not None and idx2 < len(choices):
                 answer_from_c = (choices[idx2] or "").strip()
         elif isinstance(correct_answer_raw, str):
@@ -337,7 +402,6 @@ def api_run_flow_batch():
 
 
 @app.route("/api/save-question", methods=["POST"])
-
 def api_save_question():
     """Lưu câu hỏi (question + explanation + choices + correct_answer) vào file JSON trong thư mục data/."""
     data = request.get_json() or {}
@@ -357,4 +421,4 @@ def api_save_question():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+
+# Cài đặt TeX Live và các công cụ xử lý ảnh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  texlive-latex-base \
+  texlive-pictures \
+  texlive-latex-extra \
+  poppler-utils \
+  && rm -rf /var/lib/apt/lists/*
+
+# Cài đặt thư viện Python
+RUN pip install fastapi uvicorn pydantic
+
+WORKDIR /app
+COPY . .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
